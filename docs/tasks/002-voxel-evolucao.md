@@ -1,7 +1,12 @@
 # Task 002 — Mundo voxel, cérebro em três camadas e evolução darwiniana
 
-**Status:** etapa 1 em andamento (iniciada 2026-11-26) — motor voxel + protocolo v2 prontos; treino do cérebro base rodando  
+**Status:** etapa 1 em fechamento (iniciada 2026-11-26) — motor voxel, protocolo v2, cérebros v2 e v3 prontos; treinos parados a pedido do usuário  
 **Base:** Task 001 (PPO `ppo-f`: come 3,5× o aleatório, vida 3,16×, sede não resolvida)
+
+> Este arquivo é o **registro das decisões de design**. O trabalho executável está dividido em tasks com
+> dependências: `003-etapa-1-fechamento.md`, `004-etapa-2.md`, `005-etapa-3.md`,
+> `006-etapa-4-e-transversais.md`. Visão geral: `docs/ROADMAP.md`. Onde este arquivo e as tasks
+> divergirem, valem as tasks (decisões mais novas).
 
 ## Objetivo
 Animais que vivem como animais reais — andam, comem, bebem, descansam, fogem, se reproduzem — num
@@ -17,12 +22,13 @@ vida**; o resto são meios que os animais encontram.
 | Cérebro | **3 camadas:** base compartilhada (espécie, PPO, recebe os genes como entrada) + **instinto** (~3k pesos, herdado com mutação, não aprendido) + **hábitos** (camada pessoal que nasce zerada, aprende na vida e por imitação) |
 | Herança | Darwin: genes + instinto mutados; nada aprendido é herdado geneticamente. Hábitos passam **culturalmente** (filho imita adultos da família que estão indo bem) |
 | Reprodução | **Sexuada:** dois adultos < 2 m, ação acasalar, energia > limiar fértil (gene), distância genética < limiar (especiação). Filho = crossover + mutação; cada pai paga gema |
-| População | Treino: resgate pelo arquivo abaixo de 16 vivas, teto 64, velhice (gene). Depois: **modo "realidade dura"** configurável (sem resgate) |
-| Predadores | **Duas espécies iniciais:** herbívoros (maioria) + carnívoros (minoria). Mordida em criatura fere; carcaça vira carne. Dieta, tamanho, garras e velocidade evoluem livres |
+| População | Treino: resgate pelo arquivo abaixo de 16 vivas, ~~teto 64~~ **teto 150–250 por mundo (ilha, etapa 2)**, velhice (gene). Depois: **modo "realidade dura"** configurável (sem resgate) |
+| Predadores | ~~Duas espécies iniciais~~ **Espécies iniciais em aberto (D1 em `004-etapa-2.md`; recomendação: A herbívoro 3 anos, B herbívoro 20 anos, C carnívoro)**: herbívoros (maioria) + carnívoros (minoria). Mordida em criatura fere; carcaça vira carne. Dieta, tamanho, garras e velocidade evoluem livres |
 | Habilidades | Cavar e escalar existem para todos, mas a eficácia depende do corpo (garras, força, tamanho). A evolução escolhe o corpo, o aprendizado escolhe quando usar |
 | Medo | **Sentido** (vê/cheira carnívoros e maiores que si) + **sentimento** na interocepção (cresce com ameaça próxima e dor recente, a recompensa pune) + **gene** do peso do medo. Nada de "fuja" programado |
 | Voxel | **Tudo em blocos, inclusive a física:** terreno em chunks com colisão de blocos, cavável; água, árvores escaláveis e animais em cubos; visão por raio voxel (DDA em C#, sem física) |
-| Escala | Blocos de **0,5 m**, mapa **384 × 384 m**, 48 m de altura (~56 M blocos). Animais de ~0,5 m a ~3 m (gene). Seed de avaliação reservada |
+| Escala | Blocos de **0,5 m**. Etapa 1: mapa **384 × 384 m**, 48 m de altura. **Etapa 2: ilha em mapa de 768 × 768 m, 64 m de altura.** Animais de ~0,5 m a ~3 m (gene). Seed de avaliação reservada |
+| Genética (dono) | ~~Python dono dos genomas~~ **em aberto (D2): recomendação C# Core**, porque o simulador próprio roda tudo localmente |
 
 ## Evolução física e espécies (grill-me 2026-11-26, parte 2)
 
@@ -73,8 +79,8 @@ Encaixe nas etapas: HUD leve, inspetor (Estado, Mente) → etapa 1; SQLite, Obse
 | 1a Núcleo voxel (`CreatureIA.Core/Voxel`): grade em chunks 16³ preguiçosa, gerador (biomas, 6 lagos, árvores), malha gulosa, raio DDA, colisão AABB com degrau 0,55 m, cavar | ✅ | 26 testes em `VoxelTests`; mundo cheio: gerar 282 ms, malha 1,6 s (Release), raio ~1,6 µs |
 | 1b Godot no voxel: `BiomeMap` dono do `VoxelWorld`, chunks renderizados, criatura `Node3D` + `VoxelPhysics` (nada de física Godot), visão DDA + cilindros, picking voxel | ✅ | smoke aleatório `benchmarks/runs/voxel-smoke-2026-11-26` (48 vivas, 0 falhas, ~15 ms/tick); screenshot conferido |
 | 1c Protocolo v2 (1000 obs / 12 ações: + cavar, escalar), medo (sentido: visão/cheiro de ameaça; sentimento: interocepção 11; recompensa `fear_weight=0.3`) | ✅ | `contracts/protocol-v2.json`, fixture `hello-v2.hex`; C# 43/43, pytest 47/47; smoke PPO `v2-ppo-smoke-2026-11-26` (3000 ticks, 0 falhas) |
-| 1d Treino do cérebro base do zero | ⏳ | `benchmarks/runs/v2-ppo-a` (3 mundos, seeds 1–3, currículo 2800 plantas / 12 lagos, 72k ticks) |
-| 1d' **Cérebro v3** (decisão do usuário 2026-11-26): GRU 512 de memória + curiosidade RND, 3.991.065 parâmetros; PPO recorrente | ✅ código / ⏳ treino | `learning/recurrent.py`, `test_recurrent.py`; pytest 55/55; smoke `v3-smoke`; treino `v3-gru-a` (mesma config do `v2-ppo-a`) |
+| 1d Treino do cérebro base do zero | ✅ | `benchmarks/runs/v2-ppo-a` (3 mundos, seeds 1–3, currículo 2800 plantas / 12 lagos, 72k ticks concluídos); vida média 523 → 708 s |
+| 1d' **Cérebro v3** (decisão do usuário 2026-11-26): GRU 512 de memória + curiosidade RND, 3.991.065 parâmetros; PPO recorrente | ✅ código / ⚠️ treino parado na atualização 1.367, vida média caindo 474 → 392 s (T1.1) | `learning/recurrent.py`, `test_recurrent.py`; pytest 55/55; smoke `v3-smoke`; treino `v3-gru-a` (mesma config do `v2-ppo-a`) |
 | 1e Avaliação no mapa reservado (seed 0): aleatório × v2 (`v2-ppo-a`, 72k ticks concluído) × v3 (`v3-gru-a`) | ⬜ | critério acima |
 | Vegetação variada: carvalho, carvalho grande, bétula, abeto, **sequoia gigante** (20–32 m, tronco 2×2/3×3), acácia, cacto; arbustos; capim e flores (decoração em X, sem colisão, invisível à visão) | ✅ | `TreeBuilder`; 46/46 testes; screenshot seed 1337 |
 | Criaturas em cubos (visual provisório; corpo modular voxel por gene na etapa 2) | ✅ | `CreatureVisual` usa só caixas |
@@ -163,11 +169,8 @@ Notas técnicas:
   trazem conhecimento que a natureza não deu e não servem de cérebro de criatura.
 
 ### Etapa 2 — Genes, instinto, reprodução, predadores
-- Genoma (corpo, metabolismo, drives incluindo medo, garras, dieta, cor), crossover, mutação,
-  distância genética, arquivo + anti-extinção, teto 64, velhice.
-- Instinto por indivíduo (`ação = base + α(idade)·instinto`), genes como entrada do cérebro base.
-- Duas espécies iniciais; carne, carcaça, mordida em criatura.
-- Log de genealogia; sinal Baldwin (tempo até a 1ª refeição cai por geração).
+Itens originais (genoma, instinto, predadores, genealogia, sinal Baldwin) somados às ampliações acima:
+**tasks executáveis em `004-etapa-2.md`** (T2.0–T2.9, com dependências e decisões pendentes D1–D4).
 
 ### Etapa 3 — Cultura, cavar/escalar e realidade dura
 - Camada de hábitos por indivíduo + imitação de parentes na infância.
