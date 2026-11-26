@@ -1,0 +1,8 @@
+"""Python brain runtime for Criatura IA."""
+
+OBSERVATION_DIM = 1000
+ACTION_DIM = 12
+PROTOCOL_VERSION = 2
+
+__all__ = ["OBSERVATION_DIM", "ACTION_DIM", "PROTOCOL_VERSION"]
+

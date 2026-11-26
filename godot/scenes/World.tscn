@@ -1,0 +1,80 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://scripts/World/WorldRoot.cs" id="1_world"]
+[ext_resource type="Script" path="res://scripts/World/BiomeMap.cs" id="2_biome"]
+[ext_resource type="Script" path="res://scripts/World/TerrainGenerator.cs" id="3_terrain"]
+[ext_resource type="Script" path="res://scripts/World/WaterBodies.cs" id="4_water"]
+[ext_resource type="Script" path="res://scripts/World/PlantManager.cs" id="5_plants"]
+[ext_resource type="Script" path="res://scripts/World/DayNightCycle.cs" id="6_day"]
+[ext_resource type="Script" path="res://scripts/World/SeasonCycle.cs" id="7_season"]
+[ext_resource type="Script" path="res://scripts/Net/BrainBridge.cs" id="8_bridge"]
+[ext_resource type="Script" path="res://scripts/Net/SimulationCoordinator.cs" id="9_coord"]
+[ext_resource type="Script" path="res://scripts/Spectator/SpectatorController.cs" id="10_spec"]
+[ext_resource type="PackedScene" path="res://scenes/Creature.tscn" id="11_creature"]
+[ext_resource type="Script" path="res://scripts/World/SensoryField.cs" id="12_sensory"]
+
+[sub_resource type="Environment" id="Environment_world"]
+background_mode = 1
+background_color = Color(0.25, 0.42, 0.64, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.65, 0.7, 0.8, 1)
+ambient_light_energy = 0.75
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_world")
+CreatureScene = ExtResource("11_creature")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_world")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-55, -30, 0)
+shadow_enabled = true
+
+[node name="BiomeMap" type="Node" parent="."]
+script = ExtResource("2_biome")
+
+[node name="DayNightCycle" type="Node" parent="."]
+script = ExtResource("6_day")
+
+[node name="SeasonCycle" type="Node" parent="."]
+script = ExtResource("7_season")
+
+[node name="TerrainGenerator" type="Node3D" parent="."]
+script = ExtResource("3_terrain")
+
+[node name="WaterBodies" type="Node3D" parent="."]
+script = ExtResource("4_water")
+
+[node name="PlantManager" type="Node3D" parent="."]
+script = ExtResource("5_plants")
+
+[node name="Creatures" type="Node3D" parent="."]
+
+[node name="SensoryField" type="Node" parent="."]
+script = ExtResource("12_sensory")
+
+[node name="BrainBridge" type="Node" parent="."]
+script = ExtResource("8_bridge")
+
+[node name="SimulationCoordinator" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("9_coord")
+
+[node name="Spectator" type="Node3D" parent="."]
+script = ExtResource("10_spec")
+
+[node name="Camera3D" type="Camera3D" parent="Spectator"]
+position = Vector3(0, 35, 45)
+rotation_degrees = Vector3(-35, 0, 0)
+
+[node name="Overlay" type="CanvasLayer" parent="Spectator"]
+
+[node name="Telemetry" type="Label" parent="Spectator/Overlay"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 520.0
+offset_bottom = 150.0
+text = "Criatura IA"
+theme_override_colors/font_color = Color(0.95, 1, 0.95, 1)
+theme_override_font_sizes/font_size = 18

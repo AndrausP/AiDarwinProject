@@ -1,0 +1,30 @@
+﻿[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/Creature/CreatureBody.cs" id="1_body"]
+[ext_resource type="Script" path="res://scripts/Creature/Actuators.cs" id="2_act"]
+[ext_resource type="Script" path="res://scripts/Creature/Senses.cs" id="3_senses"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.45
+height = 1.8
+
+[sub_resource type="SphereMesh" id="SphereMesh_head"]
+radius = 0.35
+height = 0.7
+
+[node name="Creature" type="Node3D"]
+script = ExtResource("1_body")
+
+[node name="BodyMesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.9, 0)
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="HeadMesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.8, -0.25)
+mesh = SubResource("SphereMesh_head")
+
+[node name="Actuators" type="Node" parent="."]
+script = ExtResource("2_act")
+
+[node name="Senses" type="Node" parent="."]
+script = ExtResource("3_senses")

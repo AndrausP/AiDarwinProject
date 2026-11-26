@@ -1,0 +1,17 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CreatureIA.Godot</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="scripts\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="CreatureIA.Core\CreatureIA.Core.csproj" />
+    <ProjectReference Include="CreatureIA.Protocol\CreatureIA.Protocol.csproj" />
+  </ItemGroup>
+</Project>

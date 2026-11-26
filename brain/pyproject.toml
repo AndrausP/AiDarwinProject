@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "creature-brain"
+version = "0.1.0"
+description = "Lockstep bridge, homeostatic reward and shared PPO baseline for Criatura IA"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=2.0,<3",
+  "torch>=2.4,<3",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3,<10",
+  "pytest-asyncio>=0.24,<2",
+]
+
+[project.scripts]
+creature-brain-server = "creature_brain.bridge.server:main"
+creature-benchmark = "creature_brain.benchmarks.baseline:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/creature_brain"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
