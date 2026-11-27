@@ -80,6 +80,13 @@ public static class ShowcaseGenerator
         lakes.Add(new LakeBasin(18f + grid.BlockSize * 0.5f, midZ + grid.BlockSize * 0.5f, 2.75f));
         world.Labels.Add(("Lago (beber)", 18f, 1.8f, midZ + 4.5f));
 
+        // Sea pool (etapa 2): salt water looks like water but does not quench thirst.
+        var (sx, sz) = Block(grid, 28f, midZ);
+        for (var dz = -4; dz <= 4; dz++)
+        for (var dx = -4; dx <= 4; dx++)
+            grid.SetRaw(sx + dx, Floor, sz + dz, Math.Max(Math.Abs(dx), Math.Abs(dz)) <= 3 ? BlockType.SaltWater : BlockType.Sand);
+        world.Labels.Add(("Mar (salgado)", 28f, 1.8f, midZ + 3.5f));
+
         // Front row: block palette, a 1 × 1 × 2 pillar per solid block type.
         var palette = new (BlockType Block, string Name)[]
         {

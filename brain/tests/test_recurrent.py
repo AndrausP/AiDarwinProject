@@ -39,6 +39,46 @@ def test_should_replay_same_outputs_when_sequence_matches_stepwise_acting() -> N
         assert torch.allclose(value, value_seq[t], atol=1e-5)
 
 
+def test_should_match_grucell_reference_when_fused_sequence_has_several_restarts() -> None:
+    torch.manual_seed(1)
+    model = RecurrentActorCritic()
+    cell = torch.nn.GRUCell(768, 512)
+    cell.load_state_dict({name: getattr(model.memory, f"{name}_l0") for name in ("weight_ih", "weight_hh", "bias_ih", "bias_hh")})
+    observations = torch.randn(12, 4, OBSERVATION_DIM)
+    starts = torch.zeros(12, 4, dtype=torch.bool)
+    starts[0, 2] = True
+    starts[4, 0] = True
+    starts[9, 1] = True
+    starts[9, 3] = True
+    initial = torch.randn(4, 512)
+    with torch.no_grad():
+        encoded = model.encoder(observations)
+        hidden, reference = initial, []
+        for t in range(12):
+            hidden = cell(encoded[t], hidden * (~starts[t]).unsqueeze(-1).float())
+            reference.append(hidden)
+        expected_mean, _, expected_value = model._outputs(encoded, torch.stack(reference))
+        mean, _, value = model.sequence(observations, initial, starts)
+
+    assert torch.allclose(mean, expected_mean, atol=1e-5)
+    assert torch.allclose(value, expected_value, atol=1e-5)
+
+
+def test_should_load_grucell_checkpoint_when_brain_v3_switched_to_fused_gru() -> None:
+    torch.manual_seed(2)
+    model = RecurrentActorCritic()
+    legacy = {
+        (key.replace("_l0", "") if key.startswith("memory.") else key): value.clone()
+        for key, value in model.state_dict().items()
+    }
+    assert "memory.weight_ih" in legacy
+    fresh = RecurrentActorCritic()
+
+    fresh.load_state_dict(legacy)
+
+    assert torch.equal(fresh.memory.weight_hh_l0, model.memory.weight_hh_l0)
+
+
 def test_should_remember_past_observation_when_memory_is_carried() -> None:
     torch.manual_seed(0)
     model = RecurrentActorCritic()
@@ -130,3 +170,69 @@ def test_should_run_without_curiosity_when_weight_is_zero() -> None:
         policy.act(Step(tick, (1,), (obs,)))
     assert policy.curiosity is None
     assert policy.update_count >= 1
+
+
+@pytest.mark.parametrize("brain", ["gru", "mlp"])
+def test_should_keep_weights_and_checkpoint_when_evaluation_is_frozen(tmp_path, brain) -> None:
+    import numpy as np
+
+    checkpoint = tmp_path / "ppo.pt"
+    trainer = OnlinePPOPolicy(online_config=OnlinePPOConfig(
+        rollout_horizon=4, checkpoint_every_updates=1, checkpoint_path=checkpoint, brain=brain))
+    observations = tuple(map(tuple, torch.rand(2, OBSERVATION_DIM).tolist()))
+    for tick in range(6):
+        trainer.act(Step(tick, (1, 2), observations))
+    assert checkpoint.exists()
+    saved_bytes = checkpoint.read_bytes()
+
+    frozen = OnlinePPOPolicy(online_config=OnlinePPOConfig(
+        rollout_horizon=4, checkpoint_every_updates=1, checkpoint_path=checkpoint, brain=brain, frozen=True))
+    weights = {name: value.clone() for name, value in frozen.model.state_dict().items()}
+    mean = frozen.observation_rms.mean.copy()
+    for tick in range(40):
+        ids = (1, 2) if tick < 20 else (2, 3)  # a death and a newborn mid-run
+        actions = frozen.act(Step(tick, ids, tuple(map(tuple, torch.rand(2, OBSERVATION_DIM).tolist()))))
+        assert len(actions) == 2 and all(len(a) == ACTION_DIM for a in actions)
+
+    assert all(torch.equal(weights[name], value) for name, value in frozen.model.state_dict().items())
+    assert np.array_equal(frozen.observation_rms.mean, mean)
+    assert frozen.update_count == trainer.update_count
+    assert checkpoint.read_bytes() == saved_bytes
+
+
+def test_should_refuse_frozen_evaluation_when_checkpoint_is_missing(tmp_path) -> None:
+    with pytest.raises(ValueError):
+        OnlinePPOPolicy(online_config=OnlinePPOConfig(checkpoint_path=tmp_path / "none.pt", frozen=True))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="fp16 autocast needs CUDA")
+def test_should_match_fp32_update_closely_when_amp_is_enabled() -> None:
+    from creature_brain.learning.ppo import PPOConfig
+    from creature_brain.learning.recurrent import RecurrentPPOTrainer, SequenceBatch
+
+    def run(amp: bool):
+        torch.manual_seed(3)
+        model = RecurrentActorCritic().cuda()
+        trainer = RecurrentPPOTrainer(model, PPOConfig(amp=amp, epochs=1), seed=0)
+        g = torch.Generator(device="cuda").manual_seed(5)
+        t, n = 16, 8
+        starts = torch.zeros(t, n, dtype=torch.bool, device="cuda")
+        starts[0] = True
+        batch = SequenceBatch(
+            torch.randn(t, n, OBSERVATION_DIM, device="cuda", generator=g),
+            torch.randn(t, n, ACTION_DIM, device="cuda", generator=g),
+            torch.randn(t, n, device="cuda", generator=g) - 8.0,
+            torch.randn(t, n, device="cuda", generator=g),
+            torch.randn(t, n, device="cuda", generator=g),
+            torch.ones(t, n, dtype=torch.bool, device="cuda"),
+            starts,
+            torch.zeros(n, 512, device="cuda"),
+        )
+        return trainer.update(batch), model
+
+    full, full_model = run(False)
+    half, half_model = run(True)
+
+    assert abs(half.value_loss - full.value_loss) < 0.05 * max(1.0, abs(full.value_loss))
+    assert abs(half.entropy - full.entropy) < 1e-3
+    assert all(torch.isfinite(p).all() for p in half_model.parameters())

@@ -32,7 +32,7 @@ Roteiro com dependências: `docs/ROADMAP.md`. Plano detalhado: `docs/tasks/002-v
 
 ### Cérebro
 - v3 (`--brain gru`, padrão): ~4,0 M parâmetros — encoder 1000→768→768, **GRU 512 (memória)**, head com atalho
-  reativo, ator 12 / crítico 1, curiosidade RND. PPO recorrente (replay de 64 passos, reset no nascimento).
+  reativo, ator 12 / crítico 1. Curiosidade RND existe mas fica **desligada** (T1.1: distraía e fazia cavar). PPO recorrente (replay de 64 passos, reset no nascimento).
 - v2 (`--brain mlp`): 0,65 M, sem memória. Mantido só para comparação e para retomar runs antigos (`v2-ppo-a`).
 - Etapa 2 adiciona camada de **instinto** por indivíduo (herdada com mutação) e genes como entrada.
 - **Meta do projeto: cérebro v4 ~30 M parâmetros** (codificador por sentido, atenção social, GRU 2×1024,
@@ -40,8 +40,8 @@ Roteiro com dependências: `docs/ROADMAP.md`. Plano detalhado: `docs/tasks/002-v
   Desenho em `docs/tasks/002-voxel-evolucao.md`.
 
 ### Ambiente de treino (padrão)
-- Treino roda no **simulador próprio em C# puro (`CreatureIA.Sim`, etapa 2)**, sem Godot, vários mundos em
-  paralelo. Godot é só para assistir. Até o Sim existir, treina-se pelo Godot headless (`train-ppo.ps1`).
+- Treino roda no **simulador próprio em C# puro (`CreatureIA.Sim`)**, sem Godot, vários mundos em paralelo num
+  STEP só (`scripts/train.ps1`). Godot é só para assistir. `train-ppo.ps1` (Godot headless) fica para comparação.
 - Máquina principal de treino: **desktop RTX 2060 6 GB** (casa, 24 h). Notebook RTX 3050 Laptop: desenvolvimento.
 - Precisão mista **fp16** (Turing não tem bf16). Nuvem grátis só como plano B.
 
@@ -71,8 +71,10 @@ dotnet test godot\tests\CreatureIA.Tests
 cd brain; ..\.venv\Scripts\python.exe -m pytest -q
 # compilar o jogo (depois de mudar C#)
 .tools\godot-4.7.2-mono\...\Godot_v4.7.2-stable_mono_win64_console.exe --headless --path godot --build-solutions --quit
-# treinar (retomável pelo RunName)
-.\scripts\train-ppo.ps1 -RunName v3-gru-a -Brain gru -Ticks 72000 -Seed 1 -Worlds 3 -Plants 2800 -Lakes 12
+# treinar no Sim (retomável pelo RunName: cérebro e mundos); -MaxMinutes para parar a tempo
+.\scripts\train.ps1 -RunName v3-a -Brain gru -Worlds 6 -Ticks 72000 -Seed 1 -Plants 2800 -Lakes 12
+# avaliar a etapa (seed 0 reservada, políticas congeladas contra o aleatório)
+.\scripts\eval-stage.ps1 -Policies "v2=night-v2:mlp","v3=night-v3:gru" -Replicas 6 -Sequential
 # assistir / sala branca de exemplos
 .\scripts\watch.ps1 -Fresh
 .\scripts\watch.ps1 -Showcase

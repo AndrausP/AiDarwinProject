@@ -24,6 +24,10 @@ public static class RunSettings
     public static readonly bool Showcase =
         System.Environment.GetEnvironmentVariable("CREATURE_IA_SHOWCASE") == "1";
 
+    /// <summary>Etapa-2 island preview (CREATURE_IA_ISLAND=1): 768 m island, salt sea, rivers. Viewing only for now.</summary>
+    public static readonly bool Island =
+        System.Environment.GetEnvironmentVariable("CREATURE_IA_ISLAND") == "1";
+
     private static readonly int? PlantsOverride = ReadInt("CREATURE_IA_PLANTS");
 
     /// <summary>Plant count override (training curriculum, e.g. abundant food early on).</summary>

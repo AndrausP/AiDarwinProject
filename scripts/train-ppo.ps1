@@ -14,6 +14,8 @@ param(
     [int]$Worlds = 1,             # parallel Godot worlds (seeds Seed..Seed+Worlds-1) feeding one brain
     [int]$Plants = 0,             # 0 = world default; >0 overrides (food-abundance curriculum)
     [int]$Lakes = 0,              # 0 = world default; >0 overrides (water curriculum)
+    [double]$Curiosity = 0.0,     # gru only: RND novelty weight; off by default (T1.1)
+    [double]$LearningRate = 3e-4, # new runs only: a resumed checkpoint keeps its optimizer state
     [switch]$NoRespawn            # one life per creature; world quits when all died (paired G10 benchmark)
 )
 $ErrorActionPreference = "Stop"
@@ -35,6 +37,8 @@ $serverArgs = @("-m", "creature_brain.bridge.server", "--port", $Port, "--policy
     "--episodes", (Join-Path $runDir "$Policy-episodes.jsonl"))
 if (-not $NoRespawn) { $serverArgs += "--respawn" }
 if ($Policy -eq "ppo") {
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $serverArgs += @("--curiosity", $Curiosity.ToString($inv), "--lr", $LearningRate.ToString($inv))
     $serverArgs += @("--brain", $Brain, "--device", $Device, "--checkpoint", (Join-Path $runDir "ppo.pt"),
         "--metrics", (Join-Path $runDir "metrics.csv"))
 }

@@ -99,3 +99,57 @@ Cada entrada: sintoma → causa verificada → correção. Data da descoberta en
 
 ### Lição de método
 - Melhora entre blocos de treino com mapas diferentes era variação de mapa. Só a avaliação em mapa reservado contra baseline na mesma seed é evidência.
+
+## Simulador próprio e desempenho (2026-11-27, madrugada)
+
+### Mais mundos Godot não aceleravam o treino
+- **Sintoma:** 3 → 6 mundos Godot: ~72 updates/min nos dois casos. GPU em 5–10 %, cada Godot a 100 % de um núcleo.
+- **Causa:** o servidor Python atende cada mundo como sessão própria (um forward por mundo por tick e um update PPO por mundo a cada 64 ticks), tudo numa thread. O Godot gira a 100 % mesmo pausado esperando o cérebro (laço do motor), então o uso de CPU não mostra o gargalo.
+- **Correção:** `CreatureIA.Sim` junta todos os mundos num STEP só (ids globais): um forward por tick para todas as criaturas.
+
+### Update do v3 lento: GRUCell passo a passo
+- **Sintoma:** update PPO do v3 ~1,8 s por rollout (98 % do tempo do cérebro num benchmark isolado); v2 0,27 s.
+- **Causa:** `RecurrentActorCritic.sequence` fazia 64 chamadas de `GRUCell` (frente e trás) por minibatch.
+- **Correção:** `nn.GRU` (cuDNN) por segmento entre reinícios de vida; mesma matemática (teste contra GRUCell de referência), checkpoints antigos remapeados no load. Update 1,8 s → 0,43 s.
+
+### Overhead de Python por criatura no cérebro
+- **Sintoma:** perfil com 288 criaturas: ~45 ms/tick fora da rede (recompensa 22 ms, decodificar STEP 12 ms, normalizar observação 11 ms).
+- **Causa:** recompensa calculada criatura a criatura com validação em Python; STEP convertido em tupla de 288 000 floats; `RunningMeanStd` em numpy float64 na CPU.
+- **Correção:** `HomeostaticReward.compute_totals` vetorizada (teste de igualdade com a escalar), `ObservationRows` (linhas numpy preguiçosas), estatística e normalização na GPU em float64. Cérebro 132 → 80 ms/tick.
+
+### Dois `dotnet build` do mesmo projeto em paralelo
+- **Sintoma:** `CreatureIA.Sim build failed` em um dos dois treinos lançados juntos.
+- **Causa:** os dois builds escrevem o mesmo `obj/`; e um Sim rodando trava o exe de `bin/Release`.
+- **Correção:** o script noturno compila uma vez e passa `-NoBuild`; cada run executa uma cópia do Sim em `benchmarks/runs/<run>/sim/` (também guarda a versão exata usada).
+
+### Servidor asyncio não terminava depois do cliente sair (Python 3.12)
+- **Sintoma:** servidor de sonda nunca escrevia o arquivo final.
+- **Causa:** `async with server` chama `wait_closed()`, que no 3.12 espera todas as conexões fecharem; o handler não fechava o `writer`.
+- **Correção:** `writer.close()` no `finally` do handler (o `LockstepServer` já fazia).
+
+### Regressão do v3 era a curiosidade (T1.1)
+- **Sintoma:** v3 (GRU) estacionava em ~550 s de vida enquanto o v2 (MLP) subia a ~740 s com o mesmo número de updates.
+- **Diagnóstico:** 4 runs comparáveis no Sim (6 mundos × 24 000 ticks, seed 1, 374 updates cada): v2 511 → 740 s;
+  v3 controle 530 → 560; **v3 sem curiosidade 534 → 680**; v3 com lr 1e-4 486 → 501 (pior).
+- **Causa:** o bônus de novidade (RND, peso 0,02 sobre novidade normalizada) tem a mesma ordem de grandeza da recompensa
+  homeostática já escalada; distrai a política de comer/beber. Lr menor não era o problema.
+- **Correção:** v3 treina com `--curiosity 0` (`night-v3`). Curiosidade volta só com peso bem menor e medido (etapa 3).
+
+### Paridade Sim × Godot: comparar curvas, não só médias
+- **Sintoma:** vida média aleatória 349 s (Sim) × 376 s (Godot) num primeiro teste.
+- **Verificação:** sonda que registra energia, água, temperatura, sono e vivas por tick: curvas iguais do nascimento à extinção (144 → 95 → 56 → 15 vivas). A diferença vinha do sorteio de spawn/plantas (RNG próprio do Sim, PCG32), não da física.
+- **Lição:** validar ambiente novo por trajetória média por tick com a mesma política, não por um único número de resumo.
+
+### Treino longo desaprende: desvio-padrão da ação sobe até o teto (2026-11-27, manhã)
+- **Sintoma:** nos treinos de ~4 h (`night-v2` 6 400 updates, `night-v3` 3 700), a vida média no treino **caiu** por
+  quarto: v2 755 → 616 → 556 → 451 s; v3 828 → 732 → 658 → 545 s. `reward_mean` piorou de −0,0007 para −0,0058.
+- **Diagnóstico:** a entropia em `metrics.csv` subiu de ~10 para **17,027 = 12 × (0 + ½·ln 2πe)**, ou seja, as 12 ações
+  com `log_std` no teto `LOG_STD_MAX = 0` (σ = 1 antes do tanh). O v2 travou nesse valor na metade do run.
+- **Causa:** o bônus de entropia é medido na gaussiana **antes do tanh**. Com a ação saturada, aumentar σ quase não muda
+  o efeito, mas aumenta a entropia de graça. Com recompensa por passo muito pequena, o bônus (0,0005 × 17) vence o
+  gradiente da política no `log_std` e a política vira quase aleatória ao amostrar.
+- **Correção proposta (não aplicada sem medir):** coeficiente de entropia bem menor (ou zero) em runs longos,
+  teto do `log_std` mais baixo (ex. −0,5), e monitor que acusa entropia perto do teto. Avaliar sempre também em modo
+  determinístico (`-Deterministic`), que mostra o que a média da política aprendeu.
+- **Lição:** "treinar mais" não é monotônico. Acompanhar entropia e vida por quarto, e guardar checkpoints
+  intermediários para escolher o melhor na seed 0.

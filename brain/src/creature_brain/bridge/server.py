@@ -235,8 +235,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--exit-on-disconnect", action="store_true", help="stop after the Godot session ends")
     parser.add_argument("--brain", choices=("gru", "mlp"), default="gru",
                         help="PPO only: gru = brain v3 (memory + curiosity); mlp = brain v2 (resume old runs)")
-    parser.add_argument("--curiosity", type=float, default=0.02,
-                        help="PPO gru only: weight of the novelty (RND) bonus; 0 disables curiosity")
+    parser.add_argument("--curiosity", type=float, default=0.0,
+                        help="PPO gru only: weight of the novelty (RND) bonus; 0 (default since T1.1) disables curiosity")
+    parser.add_argument("--freeze", action="store_true",
+                        help="PPO only: frozen evaluation (fixed weights/normalisers, no updates, no checkpoint writes)")
+    parser.add_argument("--amp", action="store_true", help="PPO gru only: fp16 autocast in the update (T2.0e, CUDA)")
+    parser.add_argument("--deterministic", action="store_true", help="PPO only: act with the policy mean")
+    parser.add_argument("--lr", type=float, default=3e-4,
+                        help="PPO only: Adam learning rate for new runs (a resumed checkpoint keeps its optimizer state)")
     return parser.parse_args()
 
 
@@ -254,9 +260,11 @@ def main() -> None:
     )
     recorders: list = []
     episodes_stream = None
+    policy = None
     try:
         if args.policy == "ppo":
             from creature_brain.learning.online import OnlinePPOConfig, OnlinePPOPolicy
+            from creature_brain.learning.ppo import PPOConfig
             from creature_brain.learning.recurrent import CuriosityConfig
 
             policy = OnlinePPOPolicy(
@@ -267,11 +275,15 @@ def main() -> None:
                     metrics_path=args.metrics,
                     brain=args.brain,
                     curiosity=CuriosityConfig(weight=args.curiosity),
-                )
+                    frozen=args.freeze,
+                    deterministic_actions=args.deterministic,
+                ),
+                ppo_config=PPOConfig(learning_rate=args.lr, amp=args.amp),
             )
             logging.getLogger(__name__).info(
-                "brain=%s parameters=%d curiosity=%.3f",
-                args.brain, policy.model.trainable_parameter_count, args.curiosity,
+                "brain=%s parameters=%d curiosity=%.3f lr=%.2e frozen=%s update=%d",
+                args.brain, policy.model.trainable_parameter_count, args.curiosity, args.lr, args.freeze,
+                policy.update_count,
             )
         else:
             policy = RandomPolicy(args.seed)
@@ -299,6 +311,9 @@ def main() -> None:
     except KeyboardInterrupt:
         LOGGER.info("brain bridge stopped")
     finally:
+        flush = getattr(policy, "flush", None)
+        if callable(flush):
+            flush()  # keep the last updates when the simulator stops between periodic saves
         for recorder in recorders:
             recorder.close()  # idempotent: already closed at disconnect
             LOGGER.info("recorded %d episodes, tick_loss=%d", recorder.episodes_written, recorder.tick_loss)

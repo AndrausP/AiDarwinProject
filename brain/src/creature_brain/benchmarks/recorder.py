@@ -20,6 +20,11 @@ from creature_brain.bridge.protocol import EventType, Step
 INTEROCEPTION_OFFSET = 986  # observation v2
 ENERGY_INDEX = INTEROCEPTION_OFFSET
 WATER_INDEX = INTEROCEPTION_OFFSET + 1
+FATIGUE_INDEX = INTEROCEPTION_OFFSET + 6
+SLEEPING_INDEX = 976 + 6  # proprioception: sleeping flag
+# "High fatigue" (T1.3): twice the reward's fatigue setpoint (0.15). Movement halves only above 0.8,
+# which a short-lived random walker never reaches, so 0.3 keeps the metric defined for the baseline.
+HIGH_FATIGUE_THRESHOLD = 0.3
 BRAIN_SECONDS_PER_TICK = 0.1
 
 # Mirrors CreatureIA.Core.Physiology.DeathCause (byte enum).
@@ -49,6 +54,9 @@ class _Life:
     ate_while_low_energy: int = 0
     low_water_steps: int = 0
     drank_while_low_water: int = 0
+    fatigue_high: bool = False
+    high_fatigue_steps: int = 0
+    slept_while_tired: int = 0
 
 
 class EpisodeRecorder:
@@ -114,6 +122,8 @@ class EpisodeRecorder:
     def _observe(self, tick: int, creature_id: int, observation, ate: bool) -> None:
         energy = float(observation[ENERGY_INDEX])
         water = float(observation[WATER_INDEX])
+        fatigue = float(observation[FATIGUE_INDEX])
+        sleeping = float(observation[SLEEPING_INDEX]) > 0.5
         life = self._lives.get(creature_id)
         if life is None:
             life = _Life(tick, tick, water, False, False)
@@ -123,6 +133,11 @@ class EpisodeRecorder:
                 life.ate_while_low_energy += 1
             if water > life.water + self._drink_epsilon and life.water_low:
                 life.drank_while_low_water += 1
+            # Same attribution as eating/drinking: tired at t-1, asleep at t.
+            if life.fatigue_high:
+                life.high_fatigue_steps += 1
+                life.slept_while_tired += sleeping
+        life.fatigue_high = fatigue > HIGH_FATIGUE_THRESHOLD
         life.energy_low = energy < self._low_threshold
         life.water_low = water < self._low_threshold
         life.low_energy_steps += life.energy_low
@@ -161,6 +176,8 @@ class EpisodeRecorder:
             "ate_while_low_energy": life.ate_while_low_energy,
             "low_water_steps": life.low_water_steps,
             "drank_while_low_water": life.drank_while_low_water,
+            "high_fatigue_steps": life.high_fatigue_steps,
+            "slept_while_tired": life.slept_while_tired,
             "death_cause": cause,
             "config_id": self._config_id,
             "horizon": self._horizon,

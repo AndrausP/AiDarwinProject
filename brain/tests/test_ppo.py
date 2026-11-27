@@ -170,7 +170,9 @@ def test_should_return_actions_in_step_order_when_slots_are_permuted() -> None:
     )
     low = tuple([0.0] * OBSERVATION_DIM)
     high = tuple([1.0] * OBSERVATION_DIM)
-    policy.observation_rms.update = lambda batch: None  # freeze normalisation for a stable comparison
+    # Freeze normalisation for a stable comparison.
+    policy.observation_rms.update = lambda batch: None
+    policy.observation_rms.update_from_moments = lambda mean, var, count: None
     policy.act(Step(0, (1, 2), (low, high)))
     policy.act(Step(1, (2,), (high,), (_death_event(1),)))
     actions = policy.act(Step(2, (2, 3), (high, low)))  # slots are now [3, 2]

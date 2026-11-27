@@ -48,8 +48,16 @@ public partial class SpectatorController : Node3D
         _bridge = GetNode<BrainBridge>(BridgePath);
         _dayNight = GetNode<DayNightCycle>(DayNightPath);
         _season = GetNode<SeasonCycle>(SeasonPath);
+        // CREATURE_IA_CAMERA="x,y,z,pitchDegrees" places the free camera (overview screenshots).
+        var cameraSpec = System.Environment.GetEnvironmentVariable("CREATURE_IA_CAMERA")?.Split(',');
+        if (cameraSpec is { Length: 4 } && cameraSpec.All(v => float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _)))
+        {
+            var v = cameraSpec.Select(c => float.Parse(c, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            _camera.Position = new Vector3(v[0], v[1], v[2]);
+            _pitch = Mathf.DegToRad(v[3]);
+        }
         _camera.Rotation = new Vector3(_pitch, _yaw, 0f);
-        _camera.Far = 600f;
+        _camera.Far = 1600f;
 
         _telemetry.AddThemeStyleboxOverride("normal", new StyleBoxFlat
         {
@@ -89,6 +97,7 @@ public partial class SpectatorController : Node3D
             _camera.LookAt(_selected.GlobalPosition + Vector3.Up);
         }
         else MoveFreeCamera(dt);
+        AutoInspect();
         DrawSensorRays();
         UpdateTelemetry();
     }
@@ -170,6 +179,22 @@ public partial class SpectatorController : Node3D
         _following = follow;
     }
 
+    private static readonly string? AutoInspectId = System.Environment.GetEnvironmentVariable("CREATURE_IA_INSPECT");
+    private static readonly int AutoInspectTab =
+        int.TryParse(System.Environment.GetEnvironmentVariable("CREATURE_IA_INSPECT_TAB"), out var tab) ? tab : 0;
+    private bool _autoInspected;
+
+    /// <summary>Screenshots/demos: CREATURE_IA_INSPECT=id selects and follows that creature once it exists.</summary>
+    private void AutoInspect()
+    {
+        if (_autoInspected || !uint.TryParse(AutoInspectId, out var id)) return;
+        var creature = _creatures.GetChildren().OfType<CreatureBody>().FirstOrDefault(c => c.CreatureId == id && c.State.IsAlive);
+        if (creature is null) return;
+        Select(creature, follow: true);
+        _inspector.CurrentTab = AutoInspectTab;
+        _autoInspected = true;
+    }
+
     private void SelectNext()
     {
         var live = _creatures.GetChildren().OfType<CreatureBody>().Where(c => c.State.IsAlive).ToArray();
@@ -224,10 +249,12 @@ public partial class SpectatorController : Node3D
             < 0.25f => "verão",
             _ => _season.YearProgress01 < 0.5f ? "primavera" : "outono"
         };
+        // Day count from simulated brain ticks (10 Hz) and the 07:12 start of the clock.
+        var day = 1 + (int)((_coordinator.BrainTick * 0.1 + 0.3 * DayNightCycle.DayDurationSeconds) / DayNightCycle.DayDurationSeconds);
         _telemetry.Text =
-            $"tick {_coordinator.BrainTick}   RTT {_bridge.LastRoundTripMilliseconds:F1} ms   falhas {_coordinator.FailedTicks}   " +
+            $"dia {day}   {(int)hours:00}:{(int)(hours % 1f * 60f):00}   {season}   vivas {alive}/{all.Length}   " +
             $"{(_bridge.Connected ? "cérebro: Python" : "cérebro: aleatório local")}\n" +
-            $"vivas {alive}/{all.Length}   hora {(int)hours:00}:{(int)(hours % 1f * 60f):00}   {season}\n" +
+            $"tick {_coordinator.BrainTick}   RTT {_bridge.LastRoundTripMilliseconds:F1} ms   falhas {_coordinator.FailedTicks}\n" +
             "clique: inspecionar  ·  Espaço: próxima  ·  F: seguir  ·  Esc: soltar\n" +
             "WASD/setas mover  ·  Q/E descer/subir  ·  roda zoom  ·  botão direito girar  ·  Shift rápido";
     }

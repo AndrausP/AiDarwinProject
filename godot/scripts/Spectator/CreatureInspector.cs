@@ -10,17 +10,27 @@ namespace CreatureIA.Godot.Spectator;
 /// </summary>
 public partial class CreatureInspector : PanelContainer
 {
+    // Protocol v2 action order (contracts/protocol-v2.json).
     private static readonly string[] ActionNames =
-        { "empuxo", "giro", "marcha", "cabeça", "pular", "morder", "beber", "dormir", "acasalar", "som" };
+        { "empuxo", "giro", "marcha", "cabeça", "pular", "morder", "beber", "dormir", "acasalar", "som", "cavar", "escalar" };
 
     private Label _title = null!;
     private ColorRect _swatch = null!;
     private Label _status = null!;
     private Label _details = null!;
+    private Label _mind = null!;
+    private TabContainer _tabs = null!;
     private readonly Dictionary<string, (ProgressBar Bar, Label Value, StyleBoxFlat Fill)> _bars = new();
-    private readonly (ProgressBar Bar, Label Value, StyleBoxFlat Fill)[] _actions = new (ProgressBar, Label, StyleBoxFlat)[10];
+    private readonly (ProgressBar Bar, Label Value, StyleBoxFlat Fill)[] _actions = new (ProgressBar, Label, StyleBoxFlat)[12];
 
     public CreatureBody? Creature { get; set; }
+
+    /// <summary>0 = Estado, 1 = Mente.</summary>
+    public int CurrentTab
+    {
+        get => _tabs.CurrentTab;
+        set => _tabs.CurrentTab = Mathf.Clamp(value, 0, _tabs.GetTabCount() - 1);
+    }
 
     public override void _Ready()
     {
@@ -52,19 +62,33 @@ public partial class CreatureInspector : PanelContainer
         _status = new Label();
         column.AddChild(_status);
 
-        column.AddChild(Section("Fisiologia"));
-        foreach (var name in new[] { "Energia", "Água", "Temp. corpo", "Cabeça", "Torso", "Pernas", "Fadiga", "Dor", "Libido" })
-            _bars[name] = AddBar(column, name, 0f, 1f);
+        _tabs = new TabContainer();
+        column.AddChild(_tabs);
 
-        column.AddChild(Section("Corpo e ambiente"));
+        var state = new VBoxContainer { Name = "Estado" };
+        state.AddThemeConstantOverride("separation", 3);
+        _tabs.AddChild(state);
+        state.AddChild(Section("Fisiologia"));
+        foreach (var name in new[] { "Energia", "Água", "Temp. corpo", "Cabeça", "Torso", "Pernas", "Fadiga", "Dor", "Libido" })
+            _bars[name] = AddBar(state, name, 0f, 1f);
+        state.AddChild(Section("Corpo e ambiente"));
         _details = new Label();
         _details.AddThemeFontSizeOverride("font_size", 13);
-        column.AddChild(_details);
+        state.AddChild(_details);
 
-        column.AddChild(Section("Ação atual (cérebro → corpo)"));
-        for (var i = 0; i < ActionNames.Length; i++) _actions[i] = AddBar(column, ActionNames[i], -1f, 1f);
+        var mind = new VBoxContainer { Name = "Mente" };
+        mind.AddThemeConstantOverride("separation", 3);
+        _tabs.AddChild(mind);
+        mind.AddChild(Section("Sentimentos"));
+        _bars["Medo"] = AddBar(mind, "Medo", 0f, 1f);
+        _bars["Ameaça"] = AddBar(mind, "Ameaça", 0f, 1f);
+        _mind = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(290, 0) };
+        _mind.AddThemeFontSizeOverride("font_size", 13);
+        mind.AddChild(_mind);
+        mind.AddChild(Section("Ação atual (cérebro → corpo)"));
+        for (var i = 0; i < ActionNames.Length; i++) _actions[i] = AddBar(mind, ActionNames[i], -1f, 1f);
 
-        var hint = new Label { Text = "F seguir · Esc fechar" };
+        var hint = new Label { Text = "F seguir · Esc fechar · abas Estado/Mente" };
         hint.AddThemeColorOverride("font_color", new Color(0.65f, 0.7f, 0.75f));
         hint.AddThemeFontSizeOverride("font_size", 12);
         column.AddChild(hint);
@@ -108,16 +132,27 @@ public partial class CreatureInspector : PanelContainer
             $"posição      ({position.X:F0}, {position.Y:F1}, {position.Z:F0})\n" +
             $"temp. ambiente {creature.AmbientTemperatureCelsius:F1} °C  (vital 30–43 °C)";
 
+        SetBar("Medo", creature.Fear, $"{creature.Fear:P0}", new Color(0.85f, 0.4f, 1f));
+        var threat = creature.SensorSuite.LastThreat;
+        SetBar("Ameaça", threat, $"{threat:P0}", new Color(1f, 0.5f, 0.3f));
+
         var action = creature.CurrentAction;
+        var doing = new List<string>();
         for (var i = 0; i < _actions.Length && i < action.Length; i++)
         {
             var (bar, value, fill) = _actions[i];
             bar.Value = action[i];
             value.Text = $"{action[i]:+0.00;-0.00}";
-            // Discrete actions fire above 0.5; highlight them when active.
-            var active = i >= 4 && i <= 8 && action[i] > 0.5f;
+            // Discrete actions (jump .. climb, except the analogue call) fire above 0.5; highlight them.
+            var active = i >= 4 && i != 9 && action[i] > 0.5f;
+            if (active) doing.Add(ActionNames[i]);
             fill.BgColor = active ? new Color(1f, 0.8f, 0.2f) : new Color(0.4f, 0.65f, 0.9f);
         }
+        if (action.Length > 0 && Mathf.Abs(action[0]) > 0.3f) doing.Insert(0, action[0] > 0f ? "andar" : "recuar");
+        _mind.Text =
+            $"fazendo  {(doing.Count == 0 ? "parada" : string.Join(", ", doing))}\n" +
+            "crítico  — (protocolo v2 não envia)\n" +
+            "memória  zera ao nascer";
     }
 
     private void SetBar(string name, float value, string text, Color color)

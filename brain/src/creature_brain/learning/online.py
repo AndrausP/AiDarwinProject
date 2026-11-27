@@ -58,6 +58,9 @@ class OnlinePPOConfig:
     # comparison and to resume runs started before v3 (e.g. v2-ppo-a).
     brain: str = "gru"
     curiosity: CuriosityConfig = CuriosityConfig()
+    # Frozen evaluation (T1.2): fixed weights and normalisers, no rollout, no update, no curiosity,
+    # no checkpoint writes. The brain still carries its memory through each life.
+    frozen: bool = False
 
 
 @dataclass(slots=True)
@@ -120,7 +123,10 @@ class OnlinePPOPolicy:
         self.last_update: UpdateMetrics | None = None
         self.last_mean_reward = 0.0
         self._step_rewards: list[float] = []
+        self._frozen_previous_slots: tuple[int | None, ...] = ()
         checkpoint = online_config.checkpoint_path
+        if online_config.frozen and (checkpoint is None or not checkpoint.exists()):
+            raise ValueError("frozen evaluation needs an existing checkpoint")
         if checkpoint is not None and checkpoint.exists():
             self.update_count, extra = self.trainer.load_checkpoint_with_extra(checkpoint)
             if "observation_rms" in extra:
@@ -130,7 +136,7 @@ class OnlinePPOPolicy:
             if "novelty_rms" in extra:
                 self.novelty_rms.load_state_dict(extra["novelty_rms"])
 
-    _SESSION_FIELDS = ("rollout", "pending", "slots", "_slot_returns", "_step_rewards", "hidden")
+    _SESSION_FIELDS = ("rollout", "pending", "slots", "_slot_returns", "_step_rewards", "hidden", "_frozen_previous_slots")
 
     def _new_rollout(self) -> RolloutBuffer | SequenceRolloutBuffer:
         return SequenceRolloutBuffer() if self.recurrent else RolloutBuffer()
@@ -154,7 +160,38 @@ class OnlinePPOPolicy:
             "slots": [],
             "_slot_returns": np.zeros(0, dtype=np.float64),
             "_step_rewards": [],
+            "_frozen_previous_slots": (),
         }
+
+    @torch.no_grad()
+    def _act_frozen(self, step: Step) -> tuple[tuple[float, ...], ...]:
+        """Evaluation tick: same slots and memory handling as training, nothing learned or saved."""
+        array = step.observation_array
+        if array is None:
+            array = np.asarray(step.observations, dtype=np.float32).reshape(-1, OBSERVATION_DIM)
+        observations = self._observation_tensor(array, update=False)
+        row_of = {creature_id: row for row, creature_id in enumerate(step.creature_ids)}
+        previous = self._frozen_previous_slots
+        if not previous or not self._assign_slots(step.creature_ids, self._death_ids(step)):
+            self.slots = list(sorted(step.creature_ids))
+            previous = ()
+        slot_observations = self._slot_observations(observations, row_of)
+        hidden_in = None
+        if self.recurrent:
+            count = len(self.slots)
+            starts = torch.tensor(
+                [cid is None or i >= len(previous) or previous[i] != cid for i, cid in enumerate(self.slots)],
+                dtype=torch.bool, device=self.device,
+            )
+            if self.hidden is None or self.hidden.shape[0] != count:
+                self.hidden = self.model.initial_state(count, self.device)
+            hidden_in = self.hidden * (~starts).unsqueeze(-1).to(self.hidden.dtype)
+        actions, _, _, _, hidden_out = self._decide(slot_observations, hidden_in)
+        self.hidden = hidden_out
+        self._frozen_previous_slots = tuple(self.slots)
+        slot_of = {creature_id: slot for slot, creature_id in enumerate(self.slots) if creature_id is not None}
+        rows = actions.detach().cpu().tolist()
+        return tuple(tuple(rows[slot_of[creature_id]]) for creature_id in step.creature_ids)
 
     def act(self, step: Step) -> tuple[tuple[float, ...], ...]:
         """Vectorised-env style: a fixed set of agent slots. A creature that dies ends its
@@ -163,15 +200,14 @@ class OnlinePPOPolicy:
 
         One forward pass per tick: a creature that survives keeps its slot, so the value
         computed for the next decision doubles as the GAE bootstrap of the last transition."""
+        if self.online_config.frozen:
+            return self._act_frozen(step)
         array = step.observation_array
         if array is None:
             array = np.asarray(step.observations, dtype=np.float32).reshape(-1, OBSERVATION_DIM)
-        current_interoception = {
-            creature_id: tuple(row)
-            for creature_id, row in zip(
-                step.creature_ids, array[:, INTEROCEPTION_START:INTEROCEPTION_END].tolist()
-            )
-        }
+        # Rows of one float64 copy (not views of the decoded frame, which is reused per tick).
+        interoception_rows = np.array(array[:, INTEROCEPTION_START:INTEROCEPTION_END], dtype=np.float64)
+        current_interoception = dict(zip(step.creature_ids, interoception_rows))
         row_of = {creature_id: row for row, creature_id in enumerate(step.creature_ids)}
         observations = self._observation_tensor(array)
 
@@ -332,25 +368,24 @@ class OnlinePPOPolicy:
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """Rewards/terminals per slot plus a mask of slots whose creature survives (and so
         keeps its slot, making the next tick's value its bootstrap)."""
-        rewards: list[float] = []
-        terminals: list[bool] = []
-        valid: list[bool] = []
-        continuing: list[float] = []
-        for creature_id in pending.slot_ids:
-            if creature_id is None:
-                # Padding row for an empty slot: terminal so it cuts GAE, dropped from the batch.
-                rewards.append(0.0)
-                terminals.append(True)
-                valid.append(False)
-                continuing.append(0.0)
-                continue
-            previous = pending.interoception[creature_id]
-            died = creature_id in death_ids or creature_id not in row_of
-            current = current_interoception.get(creature_id, previous)
-            rewards.append(self.reward.compute(previous, current, died=died).total)
-            terminals.append(died)
-            valid.append(True)
-            continuing.append(0.0 if died else 1.0)
+        count = len(pending.slot_ids)
+        rewards = np.zeros(count, dtype=np.float64)
+        # Padding rows for empty slots: terminal so they cut GAE, dropped from the batch.
+        terminals = np.ones(count, dtype=bool)
+        valid = np.zeros(count, dtype=bool)
+        occupied = [slot for slot, creature_id in enumerate(pending.slot_ids) if creature_id is not None]
+        if occupied:
+            previous = np.stack([pending.interoception[pending.slot_ids[slot]] for slot in occupied])
+            current = np.stack([
+                current_interoception.get(pending.slot_ids[slot], previous[i]) for i, slot in enumerate(occupied)
+            ])
+            died = np.array([
+                pending.slot_ids[slot] in death_ids or pending.slot_ids[slot] not in row_of for slot in occupied
+            ], dtype=bool)
+            rewards[occupied] = self.reward.compute_totals(previous, current, died)
+            terminals[occupied] = died
+            valid[occupied] = True
+        continuing = (valid & ~terminals).astype(np.float32)
         return (
             torch.tensor(rewards, dtype=torch.float32, device=self.device),
             torch.tensor(terminals, dtype=torch.bool, device=self.device),
@@ -397,6 +432,21 @@ class OnlinePPOPolicy:
                 },
             )
 
+    def flush(self) -> None:
+        """Save the latest weights now (end of a run): periodic saves happen only every N updates."""
+        checkpoint = self.online_config.checkpoint_path
+        if self.online_config.frozen or checkpoint is None or self.update_count == 0:
+            return
+        self.trainer.save_checkpoint(
+            checkpoint,
+            step=self.update_count,
+            extra={
+                "observation_rms": self.observation_rms.state_dict(),
+                "return_rms": self.return_rms.state_dict(),
+                "novelty_rms": self.novelty_rms.state_dict(),
+            },
+        )
+
     def _append_metrics(self, steps: int, mean_reward: float, metrics: UpdateMetrics) -> None:
         path = self.online_config.metrics_path
         assert path is not None
@@ -419,16 +469,21 @@ class OnlinePPOPolicy:
                 result.add(creature_id)
         return result
 
-    def _observation_tensor(self, array: np.ndarray) -> Tensor:
+    def _observation_tensor(self, array: np.ndarray, *, update: bool = True) -> Tensor:
         if array.shape[0] == 0:
             return torch.empty((0, OBSERVATION_DIM), dtype=torch.float32, device=self.device)
         if array.ndim != 2 or array.shape[1] != OBSERVATION_DIM:
             raise ValueError("invalid protocol observation layout")
-        self.observation_rms.update(array)
-        normalized = np.clip(
-            (array - self.observation_rms.mean) / np.sqrt(self.observation_rms.var + 1e-8), -10.0, 10.0
-        )
-        return torch.as_tensor(normalized, dtype=torch.float32, device=self.device)
+        # Same float64 statistics and normalisation as before, computed on the device (T2.0e):
+        # the numpy version cost ~11 ms per tick at 288 creatures.
+        raw = torch.from_numpy(np.require(array, dtype=np.float32, requirements=("C", "W"))).to(self.device, torch.float64)
+        if update:
+            self.observation_rms.update_from_moments(
+                raw.mean(dim=0).cpu().numpy(), raw.var(dim=0, unbiased=False).cpu().numpy(), raw.shape[0]
+            )
+        mean = torch.as_tensor(self.observation_rms.mean, device=self.device)
+        std = torch.as_tensor(np.sqrt(self.observation_rms.var + 1e-8), device=self.device)
+        return ((raw - mean) / std).clamp(-10.0, 10.0).to(torch.float32)
 
     @staticmethod
     def _interoception(

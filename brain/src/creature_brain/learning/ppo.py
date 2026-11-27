@@ -22,7 +22,9 @@ from creature_brain import ACTION_DIM, OBSERVATION_DIM
 LOG_STD_MIN = -5.0
 # std <= 1: wider Gaussians mostly saturate tanh, which wastes exploration and made
 # log-probabilities of saturated actions unreliable (entropy kept rising in run ppo-b).
-LOG_STD_MAX = 0.0
+# Lowered to -0.5 (std ~0.61) after night-v2/night-v3: the pre-tanh entropy bonus pushed every action's
+# log_std to the old cap 0 within ~3000 updates and the sampled policy drifted towards random.
+LOG_STD_MAX = -0.5
 _ACTION_EPSILON = 1e-6
 
 
@@ -140,6 +142,9 @@ class PPOConfig:
     max_gradient_norm: float = 0.5
     epochs: int = 4
     minibatch_size: int = 1024  # 3072-sample rollouts -> 3 minibatches x 4 epochs
+    # T2.0e: fp16 autocast for the network forward in the brain v3 update (CUDA only). Log-probs,
+    # ratios and losses stay fp32; a GradScaler guards the backward. Off until validated on a seed-0 eval.
+    amp: bool = False
 
 
 @dataclass(slots=True)
@@ -395,9 +400,12 @@ class RunningMeanStd:
         batch = np.asarray(batch, dtype=np.float64)
         if batch.size == 0:
             return
-        batch_mean = batch.mean(axis=0)
-        batch_var = batch.var(axis=0)
-        batch_count = batch.shape[0]
+        self.update_from_moments(batch.mean(axis=0), batch.var(axis=0), batch.shape[0])
+
+    def update_from_moments(self, batch_mean: np.ndarray, batch_var: np.ndarray, batch_count: int) -> None:
+        """Merge a batch summarised by its mean and (population) variance, e.g. computed on the GPU."""
+        batch_mean = np.asarray(batch_mean, dtype=np.float64)
+        batch_var = np.asarray(batch_var, dtype=np.float64)
         delta = batch_mean - self.mean
         total = self.count + batch_count
         self.mean = self.mean + delta * batch_count / total

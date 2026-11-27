@@ -5,13 +5,15 @@ avaliação congelada na seed 0 contra o aleatório e para para mostrar ao usuá
 
 | Etapa | Arquivo de tasks | Estado |
 |---|---|---|
-| 1 — Mundo voxel + cérebro base | `docs/tasks/003-etapa-1-fechamento.md` (T1.1–T1.8) | ⏳ fechamento |
-| 2 — Simulador próprio, ilha, genes, reprodução, predadores | `docs/tasks/004-etapa-2.md` (D1–D4, T2.0–T2.9) | ⬜ |
+| 1 — Mundo voxel + cérebro base | `docs/tasks/003-etapa-1-fechamento.md` (T1.1–T1.8) | ⏳ fechamento: T1.1–T1.4, T1.6, T1.7 ✅ (2026-11-27); T1.5 treino longo e T1.8 avaliação no relatório `007` |
+| 2 — Simulador próprio, ilha, genes, reprodução, predadores | `docs/tasks/004-etapa-2.md` (D1–D4, T2.0–T2.9) | ⏳ adiantado: D1–D4 adotadas; T2.0b, T2.0c, T2.1a ✅; T2.0a, T2.0e, T2.2a–e, T2.4a como biblioteca (sem ligar ao treino) |
 | 3 — Cultura, comportamento complexo, cérebro v4 ~30 M | `docs/tasks/005-etapa-3.md` (T3.1–T3.8) | ⬜ |
 | 4 — Ecologia avançada | `docs/tasks/006-etapa-4-e-transversais.md` (T4.1–T4.4) | ⬜ |
 | Transversais | `docs/tasks/006-etapa-4-e-transversais.md` (TX.1–TX.6) | contínuo |
 
-Registro das decisões de design: `docs/tasks/002-voxel-evolucao.md`.
+Registro das decisões de design: `docs/tasks/002-voxel-evolucao.md`. Noite de 2026-11-27: `docs/tasks/007-noite-2026-11-27.md`.
+
+**Treino padrão desde 2026-11-27:** `scripts/train.ps1` (simulador próprio `CreatureIA.Sim`); o Godot fica para assistir.
 
 ```mermaid
 flowchart TD
