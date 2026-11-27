@@ -16,7 +16,7 @@ param(
     [int]$Population = 48,          # creatures per world
     [int]$Plants = 1400,
     [int]$Lakes = 6,
-    [double]$Curiosity = 0.02,
+    [double]$Curiosity = 0.0,       # gru only: RND novelty weight; off by default (T1.1: it caused the v3 regression)
     [double]$LearningRate = 3e-4,
     [double]$MaxMinutes = 0,        # also stop cleanly after this many wall-clock minutes (0 = no limit)
     [switch]$NoRespawn,

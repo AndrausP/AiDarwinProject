@@ -235,8 +235,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--exit-on-disconnect", action="store_true", help="stop after the Godot session ends")
     parser.add_argument("--brain", choices=("gru", "mlp"), default="gru",
                         help="PPO only: gru = brain v3 (memory + curiosity); mlp = brain v2 (resume old runs)")
-    parser.add_argument("--curiosity", type=float, default=0.02,
-                        help="PPO gru only: weight of the novelty (RND) bonus; 0 disables curiosity")
+    parser.add_argument("--curiosity", type=float, default=0.0,
+                        help="PPO gru only: weight of the novelty (RND) bonus; 0 (default since T1.1) disables curiosity")
     parser.add_argument("--freeze", action="store_true",
                         help="PPO only: frozen evaluation (fixed weights/normalisers, no updates, no checkpoint writes)")
     parser.add_argument("--deterministic", action="store_true", help="PPO only: act with the policy mean")

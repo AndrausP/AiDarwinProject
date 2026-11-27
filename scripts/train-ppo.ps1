@@ -14,7 +14,7 @@ param(
     [int]$Worlds = 1,             # parallel Godot worlds (seeds Seed..Seed+Worlds-1) feeding one brain
     [int]$Plants = 0,             # 0 = world default; >0 overrides (food-abundance curriculum)
     [int]$Lakes = 0,              # 0 = world default; >0 overrides (water curriculum)
-    [double]$Curiosity = 0.02,    # gru only: RND novelty weight; 0 disables curiosity
+    [double]$Curiosity = 0.0,     # gru only: RND novelty weight; off by default (T1.1)
     [double]$LearningRate = 3e-4, # new runs only: a resumed checkpoint keeps its optimizer state
     [switch]$NoRespawn            # one life per creature; world quits when all died (paired G10 benchmark)
 )
