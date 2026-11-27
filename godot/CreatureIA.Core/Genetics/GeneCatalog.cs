@@ -68,5 +68,13 @@ public sealed class GeneCatalog
         new GeneDefinition("longevity_years", 0.5f, 30f, 3f, Chromosome: 3, Position: 0f),
         new GeneDefinition("maturity_years", 0.1f, 6f, 0.4f, Chromosome: 3, Position: 0.4f),
         new GeneDefinition("fear_weight", 0f, 1f, 0.3f, Chromosome: 4, Position: 0f),
+        // Body parts (T2.2b). Dormant parts start at 0 and only work above BodyPlan.FunctionalThreshold.
+        new GeneDefinition("claws", 0f, 1f, 0f, Chromosome: 5, Position: 0f),
+        new GeneDefinition("carapace", 0f, 1f, 0f, Chromosome: 5, Position: 0.3f),
+        new GeneDefinition("horns", 0f, 1f, 0f, Chromosome: 5, Position: 0.6f),
+        new GeneDefinition("fins", 0f, 1f, 0f, Chromosome: 6, Position: 0f),
+        new GeneDefinition("teeth", 0f, 1f, 0.2f, Chromosome: 6, Position: 0.4f),
+        // Sexual dimorphism: males are (1 + bias) times the female size.
+        new GeneDefinition("male_size_bias", -0.3f, 0.5f, 0f, Chromosome: 7, Position: 0f),
     });
 }
