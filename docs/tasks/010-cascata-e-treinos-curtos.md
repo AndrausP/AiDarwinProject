@@ -54,3 +54,14 @@ Nenhuma dessas é script de comportamento. O cérebro continua decidindo tudo, e
 - No `b4`, o macho voltou a evitar acasalar. Com fome, o alívio da libido quase não vale (pela ordem das necessidades), e o custo continua existindo.
 
 **Gargalo atual: comer.** É o primeiro degrau da cascata ("nasce, quer comer, come"). O próximo treino curto ataca a alimentação: medir "come quando tem fome e há planta perto" e ver se a planta perto do bando acaba.
+
+### Degrau "comer" (sondas de comida no relatório do Sim)
+- **Sonda aleatória** (6000 ticks): fome 58 % do tempo; perto de planta 3,6 % (com fome, 1,7 %); come quando está perto 24 %. Biomassa perto do bando: 26 → 17,5.
+- **Bug de física.** O gasto de energia segue Kleiber (M^0,75), mas a reserva era fixa em 1. O bicho grande (B, massa ~4) gastava metade da energia em 74 s parado, mais rápido que o pequeno.
+  - **Correção:** toda variação de energia (comida e gasto) é dividida pela massa atual. Parado até metade da energia: A 131 s, C 194 s, B 255 s.
+  - **Teste:** `Should_StarveSlower_When_BodyIsBigger`.
+- **`b5`** (com a correção): 46 concepções, 32 nascimentos.
+  - Fome com planta perto: 4,3 % (era 1,7 %). Mortes: fome 80 %, sede 19 %.
+  - Os filhotes morrem com 143 s: são minúsculos, e a reserva acompanha a massa.
+  - "Come quando há planta perto" ficou em 25,5 %, **igual ao aleatório: o cérebro ainda não aprendeu a comer**.
+- **Próximo:** `a1-mlp` (degrau A, sem nascimentos), para ver se comer é aprendido. Depois: filhote nasce com reserva mínima ou é alimentado.
