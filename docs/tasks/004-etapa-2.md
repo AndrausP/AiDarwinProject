@@ -43,3 +43,7 @@
 | T2.7b | Observatório no Godot (Tab: Espécies, Genes, Genealogia) + inspetor (abas Genes e Família); agrupamento de espécies | T2.7a, T2.0d | UI | screenshots conferidos |
 | **T2.8** | **Controles científicos:** run de controle sem seleção (sobrevivência sorteada, mesma mutação) para provar que a mudança de genes vem da seleção | T2.4b | script + relatório | diferença significativa nos genes-alvo entre seleção e controle |
 | **T2.9** | **Avaliação da etapa 2** | T2.5, T2.6, T2.7, T2.8 | relatório | reprodução sustentada; mudança direcional de genes × controle; sinal Baldwin (tempo até a 1ª refeição cai por geração); r/K (A com mais gerações que B); nascimentos concentrados na estação. **Parar e mostrar.** |
+
+## Estado em 2026-11-27 (fim do dia)
+Todas as tasks T2.0–T2.9 implementadas e testadas; detalhes, evidências e decisões em `docs/tasks/009-etapa-2-implementacao.md`.
+Falta só o treino longo e a avaliação T2.9 (parar e mostrar).

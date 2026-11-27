@@ -31,7 +31,7 @@ Roteiro com dependências: `docs/ROADMAP.md`. Plano detalhado: `docs/tasks/002-v
   os genes expressos e se adapta ao próprio corpo. Mesmo vetor de ações para todos os corpos.
 
 ### Cérebro
-- v3 (`--brain gru`, padrão): ~4,0 M parâmetros — encoder 1124→768→768, **GRU 512 (memória)**, head com atalho
+- v3 (`--brain gru`, padrão): ~4,0 M parâmetros — encoder 1130→768→768, **GRU 512 (memória)**, head com atalho
   reativo, ator 13 / crítico 1. Curiosidade RND existe mas fica **desligada** (T1.1: distraía e fazia cavar). PPO recorrente (replay de 64 passos, reset no nascimento).
 - v2 (`--brain mlp`): 0,65 M, sem memória. Mantido só para comparação e para retomar runs antigos (`v2-ppo-a`).
 - Etapa 2 adiciona camada de **instinto** por indivíduo (herdada com mutação) e genes como entrada.
@@ -75,7 +75,10 @@ cd brain; ..\.venv\Scripts\python.exe -m pytest -q
 .\scripts\train.ps1 -RunName v3-a -Brain gru -Worlds 6 -Ticks 72000 -Seed 1 -Plants 2800 -Lakes 12
 # avaliar a etapa (seed 0 reservada, políticas congeladas contra o aleatório)
 .\scripts\eval-stage.ps1 -Policies "v2=night-v2:mlp","v3=night-v3:gru" -Replicas 6 -Sequential
-# assistir / sala branca de exemplos
+# etapa 2: seleção + controle lado a lado, depois relatório (T2.8/T2.9)
+.\scripts\stage2.ps1 -Name s2-a -Ticks 288000 -Worlds 4
+# assistir um run do Sim (Tab = observatório) / sala branca de exemplos
+.\scripts\watch.ps1 -Sim s2-a-sel
 .\scripts\watch.ps1 -Fresh
 .\scripts\watch.ps1 -Showcase
 ```

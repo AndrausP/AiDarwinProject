@@ -153,3 +153,28 @@ Cada entrada: sintoma → causa verificada → correção. Data da descoberta en
   determinístico (`-Deterministic`), que mostra o que a média da política aprendeu.
 - **Lição:** "treinar mais" não é monotônico. Acompanhar entropia e vida por quarto, e guardar checkpoints
   intermediários para escolher o melhor na seed 0.
+
+## Etapa 2: população no simulador (2026-11-27, tarde)
+
+### Snapshot divergia depois de retomar
+- **Sintoma:** teste de continuação por hash falhava com criaturas que crescem.
+- **Causa:** o corpo (tamanho, metabolismo) é recalculado a cada segundo simulado; o contador e a idade do último
+  recálculo não iam no snapshot, então o mundo retomado recalculava em outros passos.
+- **Correção:** salvar `_traitsAge` e `_stepsSinceTraits` por criatura.
+
+### Ninguém morria de velhice muito além da longevidade
+- **Causa:** `DeathChance = 1 − S(a+dt)/S(a)` com S ≈ e^-930 → 0/0 = NaN, e `NaN < x` é falso.
+- **Correção:** chance pelo log da razão: `-expm1(-(A/B)·e^{Ba}·expm1(B·dt))`.
+
+### Slots para nascimentos deixaram o cérebro 5× mais lento
+- **Sintoma:** 400 ms/tick (antes 80) ao pré-alocar 3× slots para a população crescer.
+- **Causa:** o replay da GRU processava todas as sequências, inclusive slots vazios o rollout inteiro.
+- **Correção:** `finish()` descarta colunas sem nenhuma transição válida; folga 1,5×. Resultado: 48 ms/tick.
+
+### `Start-Job` não via o servidor do cérebro subir
+- **Sintoma:** "Brain server did not start" mesmo com "listening" no log.
+- **Correção:** rodar cada `train.ps1` como processo PowerShell separado (`Start-Process`), não como job.
+
+### Cheiro em escala log não bastou para achar água
+- **Medido:** `p3-mlp` (24 000 ticks) não superou o v2; com sede perto d'água 0,17 % do tempo.
+- **Lição:** o sinal chega, mas a política ainda não associa sede a seguir o gradiente; acompanhar na etapa 2.
