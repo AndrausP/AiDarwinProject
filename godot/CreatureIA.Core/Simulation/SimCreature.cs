@@ -400,7 +400,7 @@ public sealed class SimCreature
     {
         Physiology = Physiology with
         {
-            Energy = Math.Max(0.0, Physiology.Energy - Mating.YolkCost),
+            Energy = Math.Max(0.0, Physiology.Energy - (IsFemale ? Mating.YolkCost : Mating.SpermCost)),
             Libido = 0.0,
         };
     }

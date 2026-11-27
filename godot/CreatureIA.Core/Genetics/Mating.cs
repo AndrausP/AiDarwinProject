@@ -19,6 +19,9 @@ public static class Mating
     /// <summary>Energy each parent needs and pays per conception (yolk/gestation investment).</summary>
     public const double FertileEnergy = 0.55;
     public const double YolkCost = 0.2;
+    /// <summary>Energy a male pays per mating: sperm is cheap. Paying the yolk too made learning drop mating
+    /// (b2-mlp: male choices fell from 23 % at random to 12 %).</summary>
+    public const double SpermCost = 0.02;
 
     public static MateOutcome Check(MateCandidate a, MateCandidate b)
     {

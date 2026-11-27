@@ -31,7 +31,7 @@ class RewardConfig:
     temperature_weight: float = 0.08
     integrity_weight: float = 1.25
     fatigue_weight: float = 0.35
-    libido_weight: float = 0.3
+    libido_weight: float = 1.0  # = m_libido gene default (0.3 lost to the cost of mating, b2-mlp)
     pain_weight: float = 0.5
     # Fear is a feeling (Task 002): punished so the brain learns what makes it go away. The weight
     # becomes a gene in etapa 2; kept below pain so fear alone never dominates (paralysis risk).

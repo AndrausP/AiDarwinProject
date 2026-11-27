@@ -83,7 +83,7 @@ public sealed class GeneCatalog
         new GeneDefinition("m_temperature", 0f, 0.5f, 0.08f, Chromosome: 4, Position: 0.2f),
         new GeneDefinition("m_integrity", 0f, 3f, 1.25f, Chromosome: 4, Position: 0.3f),
         new GeneDefinition("m_fatigue", 0f, 1f, 0.35f, Chromosome: 4, Position: 0.4f),
-        new GeneDefinition("m_libido", 0f, 1f, 0.3f, Chromosome: 4, Position: 0.5f),
+        new GeneDefinition("m_libido", 0f, 2f, 1f, Chromosome: 4, Position: 0.5f),
         new GeneDefinition("m_pain", 0f, 1.5f, 0.5f, Chromosome: 4, Position: 0.6f),
         new GeneDefinition("m_fear", 0f, 1f, 0.3f, Chromosome: 4, Position: 0.7f),
         new GeneDefinition("m_care", 0f, 2f, 0.5f, Chromosome: 4, Position: 0.8f),
