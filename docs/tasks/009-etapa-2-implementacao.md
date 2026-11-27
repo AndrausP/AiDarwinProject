@@ -52,6 +52,34 @@ o que falta medir com treino**. Os resultados de evolução (T2.9) só valem dep
   chance de morte de Gompertz dava 0/0 em idade alta (a criatura nunca morria de velhice).
 - Pré-alocar slots para nascimentos deixou o cérebro 5× mais lento (400 ms/tick) até tirar do update os slots vazios.
 
+## Resultado do treino longo `s2-a` (T2.9): FAIL
+288 000 ticks, 4 mundos × 48, seleção (`s2-a-sel`) × controle (`s2-a-ctl`). Relatório: `benchmarks/runs/eval-s2-a/summary.md`.
+
+| | Nascidos | Concepções | Resgates | Geração máx. | Mortes (fome / sede / frio) |
+|---|---|---|---|---|---|
+| seleção | 0 | 2 (1 inviável) | 3802 | 0 | 2765 / 958 / 181 |
+| controle | 3294 | — | 1776 | 2 | 4192 / 781 / 195 |
+
+Os 5 critérios (reprodução sustentada, mudança direcional × controle, Baldwin, r > K, estação) deram FAIL.
+
+**Diagnóstico:**
+1. **A política não aprendeu.**
+   - O `actor_log_std` terminou exatamente no teto (−0,5) nas 13 ações, nos dois runs. A entropia ficou presa em 11,946 (o máximo) desde ~1500 updates.
+   - `reward_mean` ficou em torno de −0,005 o run inteiro.
+   - Com recompensa tão pequena e vantagens normalizadas, o bônus de entropia vence: a política fica quase aleatória.
+   - É o mesmo sintoma do teto de entropia da etapa 1, que baixar o teto só mascarou.
+2. **Acasalar exige coordenação rara.**
+   - Os dois precisam ter a ação 8 > 0,5 ao mesmo tempo, a menos de 2 m, com energia ≥ 0,55, e a fêmea precisa estar na estação.
+   - A fome mata 70 % das criaturas, então energia ≥ 0,55 é rara.
+3. **O resgate sem arquivo devolve fundadores.**
+   - O arquivo só recebe genomas quando há acasalamento. Sem acasalar, todo resgate é fundador novo: a população fica no piso (64) e não há gerações.
+4. **O controle prova que o resto da cadeia funciona** (nascimento, herança, gerações e genealogia): só falta a decisão de acasalar.
+
+**Próximo passo proposto:**
+- (a) Corrigir o aprendizado: log_std fixo e decrescente (−0,5 → −1,5), sem bônus de entropia, e escala da recompensa ×10.
+- (b) Repetir um treino curto da etapa 1 para ver se a sobrevivência sobe.
+- (c) Só então refazer `s2-a`.
+
 ## Como treinar e avaliar
 ```powershell
 .\scripts\stage2.ps1 -Name s2-a -Ticks 288000 -Worlds 4            # seleção + controle lado a lado; retomável
