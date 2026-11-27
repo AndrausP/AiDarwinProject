@@ -47,6 +47,17 @@ Roteiro com dependências: `docs/ROADMAP.md`. Plano detalhado: `docs/tasks/002-v
 
 - **Sem pesos pré-treinados** (LLMs ou outros): o cérebro nasce em branco; conhecimento vem só de evolução + aprendizado em vida.
 
+### Protocolo de trabalho: microtestes, aprendizado por partes (CORE)
+Regra do usuário (2026-11-27): "o protocolo agora vai ser esse: microtestes e aprendizado por partes até termos um todo".
+- **Treino curto sempre:** ~10–40 min (24 000 ticks MLP ≈ 10 min). **Proibido treino longo** até um curto mostrar
+  resultado hábil e sustentado. Dois treinos longos (`s2-a`, 2,5 h) foram jogados fora por bugs que um curto acharia.
+- **Uma correção por vez**, medida antes e depois. Commit por correção, com o número que a justificou.
+- **Antes de mexer, medir onde trava.** Política aleatória curta (`-Policy random -Ticks 6000`) e os contadores do
+  relatório do Sim. A cascata de vida é medida degrau a degrau: comer → beber → sobreviver → cio/encontro → acasalar →
+  filhote vivo → gerações.
+- **Aprender por partes (currículo):** só sobe de degrau quando o anterior funciona. O todo é a soma dos degraus.
+- Cada rodada é registrada em `docs/tasks/010-cascata-e-treinos-curtos.md` (ou na task da vez): run, mudança, números, conclusão.
+
 ### Evidência
 - Só declarar PASS com saída real de `dotnet test` / `pytest` / run. Nunca converter "não executado" em aprovação.
 - Melhora entre blocos de treino em mapas diferentes **não é evidência**. Avaliação = **seed 0 reservada**
