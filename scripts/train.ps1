@@ -59,9 +59,9 @@ $inv = [Globalization.CultureInfo]::InvariantCulture
 $serverArgs = @("-m", "creature_brain.bridge.server", "--port", $Port, "--policy", $Policy, "--seed", $Seed,
     "--horizon", $Ticks, "--exit-on-disconnect", "--sessions", 1, "--population", ($Worlds * $Population),
     "--episodes", (Join-Path $runDir "$Policy-episodes.jsonl"), "--config-id", "sim-w$Worlds")
-# Births: population can grow to 3x the founders; slots are kept ready so births never force early updates.
+# Births: population can grow past the founders; 1.5x slots are kept ready (more grow on demand).
 if ($NoBirths -and -not $NoRespawn) { $serverArgs += "--respawn" }
-if (-not $NoBirths) { $serverArgs += @("--slot-capacity", ($Worlds * $Population * 3)) }
+if (-not $NoBirths) { $serverArgs += @("--slot-capacity", [int]($Worlds * $Population * 1.5)) }
 if ($Policy -eq "ppo") {
     $serverArgs += @("--brain", $Brain, "--device", $Device, "--checkpoint", (Join-Path $runDir "ppo.pt"),
         "--metrics", (Join-Path $runDir "metrics.csv"), "--curiosity", $Curiosity.ToString($inv), "--lr", $LearningRate.ToString($inv))

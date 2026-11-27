@@ -229,9 +229,13 @@ class SequenceRolloutBuffer:
             raise ValueError("rollout has no valid transitions")
         selected = advantages[valid]
         advantages = (advantages - selected.mean()) / (selected.std(unbiased=False) + 1e-8)
+        # Slots kept free for births (slot capacity) that stayed empty the whole rollout carry no
+        # data: drop them so the update only replays sequences that exist.
+        used = valid.any(dim=0).nonzero().flatten()
         return SequenceBatch(
-            torch.stack(self.observations), torch.stack(self.actions), torch.stack(self.log_probabilities),
-            returns, advantages * valid, valid, torch.stack(self.starts), self.initial_hidden,
+            torch.stack(self.observations)[:, used], torch.stack(self.actions)[:, used],
+            torch.stack(self.log_probabilities)[:, used], returns[:, used], (advantages * valid)[:, used],
+            valid[:, used], torch.stack(self.starts)[:, used], self.initial_hidden[used],
         )
 
 
