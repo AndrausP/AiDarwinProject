@@ -58,6 +58,9 @@ class _Life:
     fatigue_high: bool = False
     high_fatigue_steps: int = 0
     slept_while_tired: int = 0
+    # Etapa 2 (Baldwin signal, T2.9): ticks from birth to the first meal (None = never ate).
+    first_meal_tick: int | None = None
+    births: int = 0  # young this creature gave birth to (mother) or sired (father)
 
 
 class EpisodeRecorder:
@@ -106,6 +109,12 @@ class EpisodeRecorder:
         self._previous_tick = step.tick
 
         ate_ids, deaths = self._parse_events(step)
+        for event in step.events:
+            if event.event_type is EventType.BIRTH and len(event.payload) >= 12:
+                _child, mother, father = struct.unpack_from("<III", event.payload)
+                for parent in (mother, father):
+                    if parent in self._lives:
+                        self._lives[parent].births += 1
         for creature_id, observation in zip(step.creature_ids, step.observations, strict=True):
             self._observe(step.tick, creature_id, observation, creature_id in ate_ids)
         for creature_id, cause in deaths.items():
@@ -130,6 +139,8 @@ class EpisodeRecorder:
             life = _Life(tick, tick, water, False, False)
             self._lives[creature_id] = life
         else:
+            if ate and life.first_meal_tick is None:
+                life.first_meal_tick = tick
             if ate and life.energy_low:
                 life.ate_while_low_energy += 1
             if water > life.water + self._drink_epsilon and life.water_low:
@@ -179,6 +190,8 @@ class EpisodeRecorder:
             "drank_while_low_water": life.drank_while_low_water,
             "high_fatigue_steps": life.high_fatigue_steps,
             "slept_while_tired": life.slept_while_tired,
+            "first_meal_seconds": None if life.first_meal_tick is None else (life.first_meal_tick - life.first_tick) * BRAIN_SECONDS_PER_TICK,
+            "offspring": life.births,
             "death_cause": cause,
             "config_id": self._config_id,
             "horizon": self._horizon,

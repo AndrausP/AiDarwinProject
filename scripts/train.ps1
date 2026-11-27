@@ -74,10 +74,10 @@ if ($Instinct -gt 0 -and -not $NoBirths) { $serverArgs += @("--instinct", $Insti
 $env:PYTHONPATH = Join-Path $root "brain\src"
 $server = Start-Process -FilePath $python -ArgumentList $serverArgs -NoNewWindow -PassThru `
     -RedirectStandardError (Join-Path $runDir "server.log") -RedirectStandardOutput (Join-Path $runDir "server.out")
-$deadline = (Get-Date).AddSeconds(90)
+$deadline = (Get-Date).AddSeconds(300)
 while (-not (Select-String -Path (Join-Path $runDir "server.log") -Pattern "listening" -Quiet -ErrorAction SilentlyContinue)) {
     if ($server.HasExited) { throw "Brain server exited early; see $runDir\server.log" }
-    if ((Get-Date) -gt $deadline) { throw "Brain server did not start within 90 s." }
+    if ((Get-Date) -gt $deadline) { throw "Brain server did not start within 300 s." }
     Start-Sleep -Milliseconds 300
 }
 
