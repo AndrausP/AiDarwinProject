@@ -79,7 +79,7 @@ public partial class TerrainGenerator : Node3D
         instance.Mesh = arrayMesh;
     }
 
-    private static void AddSurface(ArrayMesh target, VoxelMeshData data, Material material)
+    internal static void AddSurface(ArrayMesh target, VoxelMeshData data, Material material)
     {
         if (data.IsEmpty) return;
         var vertexCount = data.Positions.Count / 3;

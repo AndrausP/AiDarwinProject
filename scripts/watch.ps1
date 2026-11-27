@@ -6,6 +6,7 @@
 #   .\scripts\watch.ps1 -Fresh                # restart the watch copy from the trained snapshot
 #   .\scripts\watch.ps1 -Brain mlp -Checkpoint benchmarks\runs\night-v2\ppo.pt -Fresh -Frozen   # a Sim-trained run, as evaluated
 #   .\scripts\watch.ps1 -Showcase             # white test room: every example side by side
+#   .\scripts\watch.ps1 -Sim s2-a-sel -World 0  # etapa 2: draw a Sim run (snapshot, follows it live; Tab = observatory)
 param(
     [ValidateSet("ppo", "random")] [string]$Policy = "ppo",
     [ValidateSet("gru", "mlp")] [string]$Brain = "gru",   # gru = brain v3 (memory + curiosity); mlp = v2 runs such as v2-ppo-a
@@ -14,10 +15,24 @@ param(
     [int]$Seed = 1337,
     [switch]$Fresh,
     [switch]$Frozen,              # watch the evaluated policy exactly: fixed weights, no online learning
-    [switch]$Showcase             # white test room with every tree/shrub/block example side by side
+    [switch]$Showcase,            # white test room with every tree/shrub/block example side by side
+    [string]$Sim = "",            # T2.0d: run name whose world snapshot the viewer draws (no brain, no re-simulation)
+    [int]$World = 0
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath "$PSScriptRoot\..").Path
+if ($Sim) {
+    $snapshot = Join-Path $root "benchmarks\runs\$Sim\worlds\world-$World.bin"
+    if (-not (Test-Path $snapshot)) { throw "no snapshot at $snapshot (the Sim saves every --save-every ticks)" }
+    $godotExe = Get-ChildItem -LiteralPath (Join-Path $root ".tools") -Filter 'Godot*_mono_win64.exe' -File -Recurse |
+        Where-Object Name -notmatch 'console' | Select-Object -First 1 -ExpandProperty FullName
+    $env:DOTNET_ROOT = Join-Path $root ".tools\dotnet8"
+    $env:CREATURE_IA_SIM_SNAPSHOT = $snapshot
+    Write-Host "viewing $snapshot (reloads when the Sim saves it again) - close the window to stop"
+    & $godotExe --path (Join-Path $root "godot") "res://scenes/SimViewer.tscn"
+    Remove-Item Env:CREATURE_IA_SIM_SNAPSHOT
+    return
+}
 $watchDir = Join-Path $root "benchmarks\runs\watch-live-v2"
 New-Item -ItemType Directory -Force $watchDir | Out-Null
 if (-not $Checkpoint) { $Checkpoint = if ($Brain -eq "gru") { "benchmarks\runs\v3-gru-a\ppo.pt" } else { "benchmarks\runs\v2-ppo-a\ppo.pt" } }
