@@ -18,7 +18,8 @@ public sealed class ObservationV3Tests
             Assert.That(ObservationLayout.OlfactionOffset, Is.EqualTo(1052));
             Assert.That(ObservationLayout.InteroceptionOffset, Is.EqualTo(1077));
             Assert.That(ObservationLayout.GenesOffset, Is.EqualTo(1097));
-            Assert.That(ObservationLayout.MotivationsOffset + ObservationLayout.MotivationsLength, Is.EqualTo(1124));
+            Assert.That(ObservationLayout.MotivationsOffset, Is.EqualTo(1120));
+            Assert.That(ObservationLayout.MotivationsOffset + ObservationLayout.MotivationsLength, Is.EqualTo(1129));
             Assert.That(ObservationLayout.Total, Is.EqualTo(ProtocolConstants.ObservationDimensions));
             Assert.That(ObservationLayout.ActionCount, Is.EqualTo(ProtocolConstants.ActionDimensions));
         });
@@ -60,7 +61,7 @@ public sealed class ObservationV3Tests
         {
             Assert.That(genes, Has.All.InRange(0f, 1f));
             Assert.That(genes, Has.Some.GreaterThan(0f));
-            Assert.That(motivations[0], Is.EqualTo(1f));
+            Assert.That(motivations[0], Is.InRange(0.5f, 1.5f)); // m_energy around its default 1 (founder variation)
             Assert.That(observation[ObservationLayout.TimeOffset + 2], Is.InRange(0f, 1f));
             Assert.That(observation, Has.All.Matches<float>(float.IsFinite));
         });

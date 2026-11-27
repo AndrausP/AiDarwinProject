@@ -68,7 +68,7 @@ foreach ($e in $entries) {
         Start-Sleep -Milliseconds 300
     }
     $simArgs = @("--port", $port, "--worlds", $Replicas, "--replicas", "--seed", $Seed, "--plants", $Plants, "--lakes", $Lakes,
-        "--ticks", $Ticks, "--quit-when-extinct", "--report-file", (Join-Path $outDir "$label-sim.json"))
+        "--ticks", $Ticks, "--quit-when-extinct", "--no-births", "--report-file", (Join-Path $outDir "$label-sim.json"))
     $processes += Start-Process -FilePath $sim -ArgumentList $simArgs -NoNewWindow -PassThru `
         -RedirectStandardError (Join-Path $outDir "$label-sim.log") -RedirectStandardOutput (Join-Path $outDir "$label-sim.out")
     $processes += $server

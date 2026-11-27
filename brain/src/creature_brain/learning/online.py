@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from creature_brain import INTEROCEPTION_OFFSET, OBSERVATION_DIM
+from creature_brain import INTEROCEPTION_OFFSET, MOTIVATIONS_DIM, MOTIVATIONS_OFFSET, OBSERVATION_DIM
 from creature_brain.bridge.protocol import EventType, Step
 from creature_brain.learning.ppo import (
     PPOConfig,
@@ -61,6 +61,9 @@ class OnlinePPOConfig:
     # Frozen evaluation (T1.2): fixed weights and normalisers, no rollout, no update, no curiosity,
     # no checkpoint writes. The brain still carries its memory through each life.
     frozen: bool = False
+    # Agent slots kept ready for a growing population (births): fewer layout changes, each of which
+    # flushes the rollout early. 0 = exactly the creatures present.
+    slot_capacity: int = 0
 
 
 @dataclass(slots=True)
@@ -73,6 +76,8 @@ class _PendingDecision:
     log_probabilities: Tensor
     values: Tensor
     interoception: dict[int, tuple[float, ...]]
+    # Individual reward weights (motivation genes, observation v3); constant over a life.
+    motivations: dict[int, np.ndarray] | None = None
     hidden_in: Tensor | None = None  # gru: memory entering this decision (already reset if new life)
     starts: Tensor | None = None  # gru: slots whose memory was zeroed for this decision
 
@@ -208,6 +213,8 @@ class OnlinePPOPolicy:
         # Rows of one float64 copy (not views of the decoded frame, which is reused per tick).
         interoception_rows = np.array(array[:, INTEROCEPTION_START:INTEROCEPTION_END], dtype=np.float64)
         current_interoception = dict(zip(step.creature_ids, interoception_rows))
+        motivation_rows = np.array(array[:, MOTIVATIONS_OFFSET:MOTIVATIONS_OFFSET + MOTIVATIONS_DIM], dtype=np.float64)
+        current_motivations = dict(zip(step.creature_ids, np.maximum(motivation_rows, 0.0)))
         row_of = {creature_id: row for row, creature_id in enumerate(step.creature_ids)}
         observations = self._observation_tensor(array)
 
@@ -216,7 +223,7 @@ class OnlinePPOPolicy:
         if self.pending is not None:
             death_ids = self._death_ids(step)
             rewards, terminals, valid, continuing = self._slot_transitions(
-                self.pending, current_interoception, row_of, death_ids
+                self.pending, current_interoception, row_of, death_ids, self._fed_amounts(step)
             )
             self._step_rewards.append(float(rewards[valid].mean()) if bool(valid.any()) else 0.0)
             transition = (self._scale_rewards(rewards, terminals, valid), terminals, valid, continuing)
@@ -224,9 +231,9 @@ class OnlinePPOPolicy:
             if layout_changed:
                 # More creatures than slots (population grew): rebuild the layout. The pending
                 # rollout is flushed with a zero bootstrap (treated as truncation; rare).
-                self.slots = list(sorted(step.creature_ids))
+                self.slots = self._padded_slots(step.creature_ids)
         else:
-            self.slots = list(sorted(step.creature_ids))
+            self.slots = self._padded_slots(step.creature_ids)
 
         slot_observations = self._slot_observations(observations, row_of)
         hidden_in, starts = self._memory_for_slots(layout_changed)
@@ -272,6 +279,7 @@ class OnlinePPOPolicy:
             log_probabilities.detach(),
             values.detach(),
             current_interoception,
+            current_motivations,
             hidden_in,
             starts,
         )
@@ -330,6 +338,26 @@ class OnlinePPOPolicy:
         scale = float(np.sqrt(self.return_rms.var + 1e-8))
         return (rewards / scale).clamp(-10.0, 10.0)
 
+    def _padded_slots(self, creature_ids: Sequence[int]) -> list[int | None]:
+        slots: list[int | None] = list(sorted(creature_ids))
+        capacity = self.online_config.slot_capacity
+        if capacity > len(slots):
+            slots.extend([None] * (capacity - len(slots)))
+        elif capacity > 0:
+            # Grew past the planned capacity: leave 25 % headroom so the next births fit.
+            slots.extend([None] * (len(slots) // 4))
+        return slots
+
+    @staticmethod
+    def _fed_amounts(step: Step) -> dict[int, float]:
+        """Energy each creature handed to its own young since the last tick (FED events)."""
+        fed: dict[int, float] = {}
+        for event in step.events:
+            if event.event_type is EventType.FED and len(event.payload) >= 12:
+                feeder, _child, amount = struct.unpack_from("<IIf", event.payload)
+                fed[feeder] = fed.get(feeder, 0.0) + float(amount)
+        return fed
+
     def _assign_slots(self, current_ids: Sequence[int], death_ids: set[int]) -> bool:
         """Free slots of creatures that are gone; give newcomers the lowest free slots
         (deterministic). Returns False when there are more creatures than slots."""
@@ -365,6 +393,7 @@ class OnlinePPOPolicy:
         current_interoception: dict[int, tuple[float, ...]],
         row_of: dict[int, int],
         death_ids: set[int],
+        fed: dict[int, float] | None = None,
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """Rewards/terminals per slot plus a mask of slots whose creature survives (and so
         keeps its slot, making the next tick's value its bootstrap)."""
@@ -382,7 +411,13 @@ class OnlinePPOPolicy:
             died = np.array([
                 pending.slot_ids[slot] in death_ids or pending.slot_ids[slot] not in row_of for slot in occupied
             ], dtype=bool)
-            rewards[occupied] = self.reward.compute_totals(previous, current, died)
+            motivations = None
+            if pending.motivations is not None and all(pending.slot_ids[s] in pending.motivations for s in occupied):
+                motivations = np.stack([pending.motivations[pending.slot_ids[s]] for s in occupied])
+                if motivations.shape[1] != len(self.reward.MOTIVATION_ORDER):
+                    motivations = None
+            given = np.array([(fed or {}).get(pending.slot_ids[s], 0.0) for s in occupied], dtype=np.float64)
+            rewards[occupied] = self.reward.compute_totals(previous, current, died, motivations, given)
             terminals[occupied] = died
             valid[occupied] = True
         continuing = (valid & ~terminals).astype(np.float32)

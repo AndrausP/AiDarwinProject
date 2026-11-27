@@ -1,4 +1,5 @@
 using System.Numerics;
+using CreatureIA.Core.Genetics;
 using CreatureIA.Core.Simulation;
 using NUnit.Framework;
 
@@ -8,8 +9,8 @@ namespace CreatureIA.Tests;
 public sealed class SimulationTests
 {
     // Small worlds keep generation fast; the default 384 m map is exercised by the Sim benchmark.
-    private static SimWorld NewWorld(int seed = 3, int population = 8) =>
-        new(new SimWorldSettings { Seed = seed, Population = population, Plants = 600, Lakes = 6 });
+    private static SimWorld NewWorld(int seed = 3, int population = 8, bool births = true) =>
+        new(new SimWorldSettings { Seed = seed, Population = population, Plants = 600, Lakes = 6, Births = births });
 
     private static float[] RandomAction(SimRandom rng)
     {
@@ -46,7 +47,7 @@ public sealed class SimulationTests
     [Test]
     public void Should_RoundTripDirections_When_ConvertingBetweenLocalAndWorld()
     {
-        var creature = new SimCreature(1, Vector3.Zero, (1f, 1f, 1f)) { Yaw = 0.7f };
+        var creature = new SimCreature(1, Vector3.Zero, Genome.Founder(Species.Catalog, Sex.Female), FounderSpecies.A) { Yaw = 0.7f };
         var local = new Vector3(0.3f, -0.2f, -0.9f);
 
         var back = creature.ToLocal(creature.ToWorld(local));
@@ -59,7 +60,7 @@ public sealed class SimulationTests
     [Test]
     public void Should_FaceMinusZ_When_YawIsZero()
     {
-        var creature = new SimCreature(1, Vector3.Zero, (1f, 1f, 1f));
+        var creature = new SimCreature(1, Vector3.Zero, Genome.Founder(Species.Catalog, Sex.Female), FounderSpecies.A);
 
         Assert.That(Vector3.Distance(creature.Forward, -Vector3.UnitZ), Is.LessThan(1e-6f));
     }
@@ -158,7 +159,7 @@ public sealed class SimulationTests
     [Test]
     public void Should_ReportDeathOnce_When_CreatureDies()
     {
-        var world = NewWorld(population: 0);
+        var world = NewWorld(population: 0, births: false);
         var spot = world.Terrain.RandomLandPoint(new SimRandom(5), 60f);
         var creature = world.Spawn(1, spot + Vector3.UnitY * 0.05f)!;
         creature.ApplyDamage(world, BodyZone.Head, 2f, CreatureIA.Core.Physiology.DeathCause.HeadInjury);
@@ -199,7 +200,7 @@ public sealed class SimulationTests
         var spot = world.Terrain.RandomLandPoint(new SimRandom(5), 60f);
         var creature = world.Spawn(1, spot + Vector3.UnitY * 0.05f)!;
         var grid = world.Terrain.Grid;
-        var (bx, by, bz) = grid.WorldToBlock(creature.Position.X, creature.Position.Y + SimCreature.Shape.Height + 0.1f, creature.Position.Z);
+        var (bx, by, bz) = grid.WorldToBlock(creature.Position.X, creature.Position.Y + creature.BodyShape.Height + 0.1f, creature.Position.Z);
         grid.Set(bx, by, bz, CreatureIA.Core.Voxel.BlockType.Stone);
 
         world.StepPhysics();

@@ -30,7 +30,9 @@ public readonly record struct LifeCycle(float LongevityYears, float MaturityYear
     public double Survival(double ageSeconds) => Math.Exp(-(A / B) * (Math.Exp(B * ageSeconds) - 1.0));
 
     /// <summary>Chance of dying of old age during [age, age + dt): exact for the Gompertz law.</summary>
-    public double DeathChance(double ageSeconds, double dt) => 1.0 - Survival(ageSeconds + dt) / Survival(ageSeconds);
+    /// <remarks>Computed from the log of the survival ratio: S(age) underflows to 0 far beyond longevity (0/0).</remarks>
+    public double DeathChance(double ageSeconds, double dt) =>
+        -double.ExpM1(-(A / B) * Math.Exp(B * ageSeconds) * double.ExpM1(B * dt));
 
     /// <summary>Rolls the senescent death for one step.</summary>
     public bool DiesOfAge(double ageSeconds, double dt, SimRandom rng) => rng.NextFloat() < DeathChance(ageSeconds, dt);

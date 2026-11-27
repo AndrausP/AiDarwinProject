@@ -81,6 +81,9 @@ class EventType(IntEnum):
     MATE_REQUEST = 2
     ATE = 3
     DAMAGED = 4
+    BIRTH = 5  # child u32, mother u32, father u32
+    MATED = 6  # female u32, male u32
+    FED = 7  # feeder u32, child u32, energy f32
 
 
 @dataclass(frozen=True, slots=True)

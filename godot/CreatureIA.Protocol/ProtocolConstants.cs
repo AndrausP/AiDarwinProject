@@ -3,7 +3,7 @@ namespace CreatureIA.Protocol;
 public static class ProtocolConstants
 {
     public const ushort Version = 3;
-    public const ushort ObservationDimensions = 1124;
+    public const ushort ObservationDimensions = 1129;
     public const ushort ActionDimensions = 13;
     public const int MaxBodyLength = 64 * 1024 * 1024;
 }
@@ -22,7 +22,10 @@ public enum EventType : byte
     Death = 1,
     MateRequest = 2,
     Ate = 3,
-    Damaged = 4
+    Damaged = 4,
+    Birth = 5,
+    Mated = 6,
+    Fed = 7
 }
 
 public enum DeathCauseCode : byte
@@ -36,5 +39,6 @@ public enum DeathCauseCode : byte
     TorsoInjury = 6,
     Age = 7,
     Fall = 8,
-    Bite = 9
+    Bite = 9,
+    Drowning = 10
 }

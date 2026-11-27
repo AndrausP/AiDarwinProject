@@ -4,6 +4,10 @@
 #
 #   .\scripts\train.ps1 -RunName sim-v3-a -Worlds 6 -Ticks 72000 -Seed 1 -Plants 2800 -Lakes 12
 #   .\scripts\train.ps1 -Policy random -RunName sim-random -NoRespawn     # matched random baseline
+#
+# Etapa 2 (default): the simulator owns the population (births, rescue, cap); the brain never respawns.
+#   -NoBirths   etapa-1 style (brain respawns every death)      -Control  scientific control (T2.8)
+#   -Island     etapa-2 island instead of the etapa-1 map
 param(
     [string]$RunName = "sim-$(Get-Date -Format 'yyyyMMdd-HHmm')",
     [long]$Ticks = 36000,          # brain ticks (10 Hz) per world: 36000 = 1 h simulated
@@ -20,6 +24,9 @@ param(
     [double]$LearningRate = 3e-4,
     [double]$MaxMinutes = 0,        # also stop cleanly after this many wall-clock minutes (0 = no limit)
     [switch]$NoRespawn,
+    [switch]$NoBirths,
+    [switch]$Control,
+    [switch]$Island,
     [switch]$Amp,                   # gru only: fp16 autocast in the update (T2.0e; validate on a seed-0 eval first)
     [switch]$NoBuild                # skip the Release build (parallel runs: build once beforehand)
 )
@@ -52,7 +59,9 @@ $inv = [Globalization.CultureInfo]::InvariantCulture
 $serverArgs = @("-m", "creature_brain.bridge.server", "--port", $Port, "--policy", $Policy, "--seed", $Seed,
     "--horizon", $Ticks, "--exit-on-disconnect", "--sessions", 1, "--population", ($Worlds * $Population),
     "--episodes", (Join-Path $runDir "$Policy-episodes.jsonl"), "--config-id", "sim-w$Worlds")
-if (-not $NoRespawn) { $serverArgs += "--respawn" }
+# Births: population can grow to 3x the founders; slots are kept ready so births never force early updates.
+if ($NoBirths -and -not $NoRespawn) { $serverArgs += "--respawn" }
+if (-not $NoBirths) { $serverArgs += @("--slot-capacity", ($Worlds * $Population * 3)) }
 if ($Policy -eq "ppo") {
     $serverArgs += @("--brain", $Brain, "--device", $Device, "--checkpoint", (Join-Path $runDir "ppo.pt"),
         "--metrics", (Join-Path $runDir "metrics.csv"), "--curiosity", $Curiosity.ToString($inv), "--lr", $LearningRate.ToString($inv))
@@ -73,6 +82,9 @@ $simArgs = @("--port", $Port, "--worlds", $Worlds, "--seed", $Seed, "--populatio
     # World snapshots (T2.0c): re-running the same RunName continues the same worlds, not fresh ones.
     "--worlds-dir", (Join-Path $runDir "worlds"))
 if ($NoRespawn) { $simArgs += "--quit-when-extinct" }
+if ($NoBirths) { $simArgs += "--no-births" } else { $simArgs += @("--genealogy", (Join-Path $runDir "genealogy.jsonl")) }
+if ($Control) { $simArgs += "--control" }
+if ($Island) { $simArgs += "--island" }
 if ($MaxMinutes -gt 0) { $simArgs += @("--max-minutes", $MaxMinutes.ToString([Globalization.CultureInfo]::InvariantCulture)) }
 Write-Host "training $Policy ($Brain) on CreatureIA.Sim: $Worlds world(s) x $Population for $Ticks ticks -> $runDir"
 $simProcess = Start-Process -FilePath $sim -ArgumentList $simArgs -NoNewWindow -PassThru `

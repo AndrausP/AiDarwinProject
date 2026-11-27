@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Globalization;
+using CreatureIA.Core.Genetics;
 using CreatureIA.Core.Simulation;
 using CreatureIA.Protocol;
 
@@ -39,6 +41,8 @@ public sealed class MultiWorld
         {
             var ids = Enumerable.Range(0, population).Select(i => (uint)(w * population + i + 1));
             var settings = replicas ? baseSettings with { Salt = w } : baseSettings with { Seed = baseSettings.Seed + w };
+            // Disjoint id ranges: births of world w never collide with another world's or the brain's ids.
+            settings = settings with { IdBase = SimWorld.SimulatorIdBase + (uint)w * 0x0100_0000u };
             _worlds[w] = new SimWorld(settings, ids);
         });
         for (var w = 0; w < worldCount; w++)
@@ -66,6 +70,42 @@ public sealed class MultiWorld
 
     /// <summary>6 physics ticks in every world, worlds in parallel.</summary>
     public void StepBrainTick() => Parallel.For(0, _worlds.Length, w => _worlds[w].StepBrainTick());
+
+    /// <summary>Genealogy (T2.7a): appends every birth and death since the last call as JSON lines.</summary>
+    public void AppendGenealogy(TextWriter writer)
+    {
+        var names = Species.Catalog.Genes.Select(g => g.Name).ToArray();
+        for (var w = 0; w < _worlds.Length; w++)
+            foreach (var r in _worlds[w].TakeGenealogy())
+            {
+                var sb = new System.Text.StringBuilder(256);
+                sb.Append(CultureInfo.InvariantCulture, $"{{\"kind\": \"{(r.IsBirth ? "birth" : "death")}\", \"tick\": {r.PhysicsTick}, \"world\": {w}, \"id\": {r.Id}, ");
+                sb.Append(CultureInfo.InvariantCulture, $"\"mother\": {r.MotherId}, \"father\": {r.FatherId}, \"lineage\": \"{r.Lineage}\", \"sex\": \"{r.Sex}\", \"generation\": {r.Generation}");
+                if (r.IsBirth)
+                {
+                    sb.Append(CultureInfo.InvariantCulture, $", \"rescue\": {(r.Rescue ? "true" : "false")}, \"genes\": {{");
+                    for (var i = 0; i < names.Length; i++)
+                        sb.Append(CultureInfo.InvariantCulture, $"{(i > 0 ? ", " : "")}\"{names[i]}\": {r.Phenotypes![i]:G6}");
+                    sb.Append('}');
+                }
+                else sb.Append(CultureInfo.InvariantCulture, $", \"cause\": \"{r.Cause}\", \"age\": {r.AgeSeconds:F1}");
+                sb.Append('}');
+                writer.WriteLine(sb.ToString());
+            }
+        writer.Flush();
+    }
+
+    public PopulationCounters PopulationTotals()
+    {
+        var total = new PopulationCounters();
+        foreach (var world in _worlds)
+        {
+            var p = world.Population;
+            total.Births += p.Births; total.Conceptions += p.Conceptions; total.Inviable += p.Inviable;
+            total.Rescues += p.Rescues; total.Deaths += p.Deaths; total.MaxGeneration = Math.Max(total.MaxGeneration, p.MaxGeneration);
+        }
+        return total;
+    }
 
     /// <summary>Observations of every live creature (sorted by id) and the events since the last call.</summary>
     public StepMessage BuildStep(ulong tick)
@@ -101,6 +141,8 @@ public sealed class MultiWorld
     public void Apply(ActMessage act, IReadOnlyList<SpawnMessage> spawns)
     {
         var byId = new Dictionary<uint, SimCreature>();
+        for (var w = 0; w < _worlds.Length; w++)
+            foreach (var creature in _worlds[w].Creatures) _worldOf[creature.Id] = w;
         foreach (var world in _worlds)
             foreach (var creature in world.Creatures) byId[creature.Id] = creature;
         foreach (var agent in act.Agents)
@@ -141,7 +183,7 @@ public sealed class MultiWorld
                 BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(5, 4), e.Quantity);
                 return new ProtocolEvent(EventType.Ate, payload);
             }
-            default:
+            case SimEventKind.Damaged:
             {
                 var payload = new byte[9];
                 BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(0, 4), e.CreatureId);
@@ -149,6 +191,34 @@ public sealed class MultiWorld
                 BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(5, 4), e.SourceId);
                 return new ProtocolEvent(EventType.Damaged, payload);
             }
+            case SimEventKind.Birth:
+            {
+                // child, mother, father
+                var payload = new byte[12];
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(0, 4), e.CreatureId);
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4, 4), e.SourceId);
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(8, 4), e.OtherId);
+                return new ProtocolEvent(EventType.Birth, payload);
+            }
+            case SimEventKind.Mated:
+            {
+                // female, male
+                var payload = new byte[8];
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(0, 4), e.CreatureId);
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4, 4), e.SourceId);
+                return new ProtocolEvent(EventType.Mated, payload);
+            }
+            case SimEventKind.Fed:
+            {
+                // feeder, child, energy given
+                var payload = new byte[12];
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(0, 4), e.CreatureId);
+                BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4, 4), e.SourceId);
+                BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(8, 4), e.Quantity);
+                return new ProtocolEvent(EventType.Fed, payload);
+            }
+            default:
+                throw new InvalidOperationException($"unknown event {e.Kind}");
         }
     }
 }

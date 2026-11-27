@@ -4,7 +4,7 @@ using CreatureIA.Core.Voxel;
 namespace CreatureIA.Core.Simulation;
 
 /// <summary>
-/// Observation v3 (Task 002 etapa 2, T2.3): 1124 floats. See contracts/protocol-v3.json and
+/// Observation v3 (Task 002 etapa 2, T2.3): 1129 floats. See contracts/protocol-v3.json and
 /// docs/tasks/008-proposta-protocolo-v3.md. Shared by the Sim and the Godot runtime.
 /// </summary>
 public static class ObservationLayout
@@ -34,17 +34,15 @@ public static class ObservationLayout
     /// <summary>sin/cos time of day, photoperiod, photoperiod trend, light now, climate temperature offset (see WriteTime).</summary>
     public const int TimeOffset = InteroceptionOffset + InteroceptionLength; // 1091
     public const int TimeLength = 6;
-    /// <summary>Expressed genes of <see cref="GeneCatalog.Basic"/>, each normalised 0..1 by its range.</summary>
+    /// <summary>Expressed body/life genes of <see cref="GeneCatalog.Basic"/> (all but the "m_" motivations), catalog order, each 0..1 by its range.</summary>
     public const int GenesOffset = TimeOffset + TimeLength; // 1097
-    public const int GenesLength = 19;
-    /// <summary>The individual's reward weights (energy, water, temperature, integrity, fatigue, libido, pain, fear).</summary>
-    public const int MotivationsOffset = GenesOffset + GenesLength; // 1116
-    public const int MotivationsLength = 8;
-    public const int Total = MotivationsOffset + MotivationsLength; // 1124
+    public const int GenesLength = 23;
+    /// <summary>The individual's reward weights (motivation genes, <see cref="GeneCatalog.MotivationOrder"/>), raw values.</summary>
+    public const int MotivationsOffset = GenesOffset + GenesLength; // 1120
+    public const int MotivationsLength = 9;
+    public const int Total = MotivationsOffset + MotivationsLength; // 1129
     public const int ActionCount = 13;
 
-    /// <summary>Default reward weights (brain RewardConfig): what every individual has until motivations are genes.</summary>
-    public static ReadOnlySpan<float> DefaultMotivations => new[] { 1f, 1f, 0.08f, 1.25f, 0.35f, 0.05f, 0.5f, 0.3f };
 
     /// <summary>
     /// Scent intensity in log scale, 0..1: <c>log1p(k·s)/log1p(k)</c>. A linear <c>Σ 1/(1+d²)</c> is ~0.001 at 30 m
@@ -81,15 +79,25 @@ public static class ObservationLayout
     }
 
     private static readonly float[] DefaultGenesNormalised = BuildDefaultGenes();
+    private static readonly float[] DefaultMotivations = BuildDefaultMotivations();
 
     private static float[] BuildDefaultGenes()
     {
-        var catalog = GeneCatalog.Basic();
-        if (catalog.Count != GenesLength) throw new InvalidOperationException($"protocol v3 carries {GenesLength} genes, catalog has {catalog.Count}");
-        return catalog.Genes.Select(g => (g.Default - g.Min) / g.Range).ToArray();
+        var catalog = Species.Catalog;
+        var body = catalog.BodyGeneIndices();
+        if (body.Length != GenesLength) throw new InvalidOperationException($"protocol v3 carries {GenesLength} genes, catalog has {body.Length}");
+        return body.Select(i => (catalog.Genes[i].Default - catalog.Genes[i].Min) / catalog.Genes[i].Range).ToArray();
     }
 
-    /// <summary>Genes and motivations until genomes are wired to creatures (T2.4): default genome, default weights.</summary>
+    private static float[] BuildDefaultMotivations()
+    {
+        var catalog = Species.Catalog;
+        var indices = catalog.MotivationIndices();
+        if (indices.Length != MotivationsLength) throw new InvalidOperationException("motivation count mismatch");
+        return indices.Select(i => catalog.Genes[i].Default).ToArray();
+    }
+
+    /// <summary>Default genome and motivations: the Godot runtime, which has no genomes yet (it only watches).</summary>
     public static void WriteDefaultGenesAndMotivations(Span<float> observation)
     {
         DefaultGenesNormalised.CopyTo(observation.Slice(GenesOffset, GenesLength));

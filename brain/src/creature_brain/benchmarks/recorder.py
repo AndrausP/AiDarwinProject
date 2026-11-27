@@ -39,6 +39,7 @@ DEATH_CAUSES = {
     7: "age",
     8: "fall",
     9: "bite",
+    10: "drowning",
 }
 CENSORED_CAUSE = "alive_at_horizon"
 

@@ -4,7 +4,8 @@ namespace CreatureIA.Core.Simulation;
 public sealed class SimClock
 {
     public const float DayDurationSeconds = 600f;
-    public const float YearDurationSeconds = DayDurationSeconds * 8f;
+    /// <summary>Etapa 2: a year of 12 days (LifeCycle.SecondsPerYear).</summary>
+    public const float YearDurationSeconds = DayDurationSeconds * 12f;
 
     /// <summary>Starts at ~07:12, just after sunrise.</summary>
     public float TimeOfDay01 { get; private set; } = 0.3f;

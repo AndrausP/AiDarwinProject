@@ -11,5 +11,7 @@ public enum DeathCause : byte
     TorsoInjury = 6,
     Age = 7,
     Fall = 8,
-    Bite = 9
+    Bite = 9,
+    /// <summary>Exhausted while swimming in deep water (T2.1b).</summary>
+    Drowning = 10
 }

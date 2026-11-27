@@ -19,17 +19,21 @@ class RewardConfig:
     temperature_setpoint: float = 37.0
     integrity_setpoint: float = 1.0
     fatigue_setpoint: float = 0.15
-    libido_setpoint: float = 0.5
+    # Etapa 2: libido builds in fed adults and mating resets it, so the setpoint is satisfaction (0).
+    libido_setpoint: float = 0.0
     energy_weight: float = 1.0
     water_weight: float = 1.0
     temperature_weight: float = 0.08
     integrity_weight: float = 1.25
     fatigue_weight: float = 0.35
-    libido_weight: float = 0.05
+    libido_weight: float = 0.3
     pain_weight: float = 0.5
     # Fear is a feeling (Task 002): punished so the brain learns what makes it go away. The weight
     # becomes a gene in etapa 2; kept below pain so fear alone never dominates (paralysis risk).
     fear_weight: float = 0.3
+    # Parental care (D3): reward per unit of energy handed to one's own young (FED event).
+    care_weight: float = 0.5
+    care_scale: float = 10.0
     death_penalty: float = 1.0
 
 
@@ -98,23 +102,25 @@ class HomeostaticReward:
         return RewardResult(total, homeostatic, pain_penalty, fear_penalty, death_penalty)
 
     #: Column order of per-individual motivation weights (T2.2e, decision D3: weights become genes).
-    MOTIVATION_ORDER = ("energy", "water", "temperature", "integrity", "fatigue", "libido", "pain", "fear")
+    MOTIVATION_ORDER = ("energy", "water", "temperature", "integrity", "fatigue", "libido", "pain", "fear", "care")
 
     def default_motivations(self, count: int) -> np.ndarray:
-        """(count, 8) weights equal to this config: what every individual has until genes exist."""
+        """(count, 9) weights equal to this config (the motivation genes' defaults)."""
         c = self.config
         row = [c.energy_weight, c.water_weight, c.temperature_weight, c.integrity_weight,
-               c.fatigue_weight, c.libido_weight, c.pain_weight, c.fear_weight]
+               c.fatigue_weight, c.libido_weight, c.pain_weight, c.fear_weight, c.care_weight]
         return np.tile(np.asarray(row, dtype=np.float64), (count, 1))
 
     def compute_totals(
-        self, previous: np.ndarray, current: np.ndarray, died: np.ndarray, motivations: np.ndarray | None = None
+        self, previous: np.ndarray, current: np.ndarray, died: np.ndarray, motivations: np.ndarray | None = None,
+        fed: np.ndarray | None = None,
     ) -> np.ndarray:
         """Vectorised ``compute(...).total`` for N creatures: (N, 12) arrays and an (N,) bool mask.
         Same formula as :meth:`compute`; per-creature Python was ~20 ms per tick at 288 creatures.
 
-        ``motivations`` (N, 8), in :attr:`MOTIVATION_ORDER`, gives each individual its own weights
-        (motivations as genes, D3); None uses the config for everyone."""
+        ``motivations`` (N, 9), in :attr:`MOTIVATION_ORDER`, gives each individual its own weights
+        (motivations as genes, D3); None uses the config for everyone. ``fed`` (N,) is the energy each
+        creature handed to its own young this step (FED events), rewarded by the care weight."""
         previous = np.asarray(previous, dtype=np.float64)
         current = np.asarray(current, dtype=np.float64)
         if previous.ndim != 2 or previous.shape[1] != INTEROCEPTION_DIM or previous.shape != current.shape:
@@ -140,7 +146,8 @@ class HomeostaticReward:
         pain_penalty = motivations[:, 6] * np.maximum(current[:, 7], 0.0)
         fear_penalty = motivations[:, 7] * np.clip(current[:, 11], 0.0, 1.0)
         death_penalty = np.where(np.asarray(died, dtype=bool), config.death_penalty, 0.0)
-        return homeostatic - pain_penalty - fear_penalty - death_penalty
+        care = 0.0 if fed is None else motivations[:, 8] * config.care_scale * np.maximum(np.asarray(fed, dtype=np.float64), 0.0)
+        return homeostatic + care - pain_penalty - fear_penalty - death_penalty
 
     @staticmethod
     def _drives(values: tuple[float, ...]) -> tuple[float, ...]:

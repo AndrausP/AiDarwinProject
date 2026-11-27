@@ -19,6 +19,11 @@ var settings = new SimWorldSettings
     Population = options.Population,
     Plants = options.Plants,
     Lakes = options.Lakes,
+    Births = !options.NoBirths,
+    Selection = !options.Control,
+    Island = options.Island,
+    MinPopulation = options.MinPopulation ?? Math.Max(4, options.Population / 3),
+    MaxPopulation = options.MaxPopulation ?? options.Population * 3,
 };
 var clock = Stopwatch.StartNew();
 var resumed = options.WorldsDir is not null && MultiWorld.HasSnapshots(options.WorldsDir, options.Worlds);
@@ -26,7 +31,8 @@ var worlds = resumed ? new MultiWorld(options.WorldsDir!, options.Worlds) : new 
 var seeds = resumed ? $"resumed from {options.WorldsDir}"
     : options.Replicas ? $"terrain seed {options.Seed}, salts 0..{options.Worlds - 1}" : $"seeds {options.Seed}..{options.Seed + options.Worlds - 1}";
 Console.Error.WriteLine($"[sim] {options.Worlds} world(s) x {options.Population} creatures generated in {clock.ElapsedMilliseconds} ms " +
-                        $"({seeds}, plants={options.Plants}, lakes={options.Lakes})");
+                        $"({seeds}, plants={options.Plants}, lakes={options.Lakes}, births={settings.Births}, selection={settings.Selection}, island={settings.Island})");
+using var genealogy = options.GenealogyFile is null ? null : new StreamWriter(options.GenealogyFile, append: true);
 
 if (options.Bench)
 {
@@ -54,7 +60,8 @@ if (options.Bench)
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
         $"[bench] {options.Ticks} brain ticks in {seconds:F2} s = {options.Ticks / seconds:F1} ticks/s, " +
         $"{options.Ticks * options.Worlds * options.Population / seconds:F0} creature-steps/s (sim {simTicks * 1000.0 / Stopwatch.Frequency / options.Ticks:F2} ms/tick, " +
-        $"observe {observeTicks * 1000.0 / Stopwatch.Frequency / options.Ticks:F2} ms/tick); live={worlds.LiveCount}"));
+        $"observe {observeTicks * 1000.0 / Stopwatch.Frequency / options.Ticks:F2} ms/tick); live={worlds.LiveCount}; " +
+        $"births={worlds.PopulationTotals().Births} conceptions={worlds.PopulationTotals().Conceptions} rescues={worlds.PopulationTotals().Rescues} deaths={worlds.PopulationTotals().Deaths} gen={worlds.PopulationTotals().MaxGeneration}"));
     return 0;
 }
 
@@ -90,6 +97,7 @@ for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
     if (response is not ActMessage act) throw new InvalidDataException("Expected ACT after STEP.");
     ProtocolCodec.ValidateMatchingAct(step, act);
     worlds.Apply(act, spawns);
+    if (genealogy is not null) worlds.AppendGenealogy(genealogy);
     var t3 = Stopwatch.GetTimestamp();
     simMs += (t1 - t0) * 1000.0 / Stopwatch.Frequency;
     observeMs += (t2 - t1) * 1000.0 / Stopwatch.Frequency;
@@ -101,14 +109,17 @@ for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
         var n = options.ReportEvery;
         Console.Error.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"[sim] tick {brainTick + 1}: {n / window.Elapsed.TotalSeconds:F1} ticks/s; per tick sim {simMs / n:F1} ms, " +
-            $"observe {observeMs / n:F1} ms, brain {waitMs / n:F1} ms; live={worlds.LiveCount}"));
+            $"observe {observeMs / n:F1} ms, brain {waitMs / n:F1} ms; live={worlds.LiveCount}; " +
+            $"births={worlds.PopulationTotals().Births} rescues={worlds.PopulationTotals().Rescues} gen={worlds.PopulationTotals().MaxGeneration}"));
         simMs = observeMs = waitMs = 0;
         window.Restart();
     }
 }
 var reason = timedOut ? "time budget" : options.Ticks > 0 && brainTick >= (ulong)options.Ticks ? "horizon" : "extinct";
 if (options.WorldsDir is not null) worlds.SaveAll(options.WorldsDir);
+if (genealogy is not null) worlds.AppendGenealogy(genealogy);
 Console.Error.WriteLine($"[run] stopping at brain tick {brainTick}: {reason}");
+var population = worlds.PopulationTotals();
 var exploits = worlds.Exploits();
 var report = string.Create(CultureInfo.InvariantCulture,
     $"{{\"brain_ticks\": {brainTick}, \"stop\": \"{reason}\", \"worlds\": {options.Worlds}, \"replicas\": {(options.Replicas ? "true" : "false")}, " +
@@ -117,7 +128,9 @@ var report = string.Create(CultureInfo.InvariantCulture,
     $"\"near_water_share\": {exploits.Share(exploits.NearWater):F6}, " +
     $"\"drink_on_when_near\": {ExploitCounters.Ratio(exploits.DrinkingNearWater, exploits.NearWater):F6}, " +
     $"\"thirsty_share\": {exploits.Share(exploits.Thirsty):F6}, " +
-    $"\"near_water_when_thirsty\": {ExploitCounters.Ratio(exploits.ThirstyNearWater, exploits.Thirsty):F6}}}");
+    $"\"near_water_when_thirsty\": {ExploitCounters.Ratio(exploits.ThirstyNearWater, exploits.Thirsty):F6}, " +
+    $"\"births\": {population.Births}, \"conceptions\": {population.Conceptions}, \"inviable\": {population.Inviable}, " +
+    $"\"rescues\": {population.Rescues}, \"deaths\": {population.Deaths}, \"max_generation\": {population.MaxGeneration}, \"live\": {worlds.LiveCount}}}");
 Console.Error.WriteLine($"[exploits] {report}");
 if (options.ReportFile is not null) File.WriteAllText(options.ReportFile, report + Environment.NewLine);
 return 0;
@@ -159,6 +172,15 @@ internal sealed record Options
     public string? WorldsDir { get; init; }
     public int SaveEvery { get; init; } = 6000;
     public double MaxMinutes { get; init; }
+    /// <summary>Etapa-1 style: no reproduction, the brain respawns (stage-1 evaluation).</summary>
+    public bool NoBirths { get; init; }
+    /// <summary>Scientific control (T2.8): random parents, no selection on who breeds.</summary>
+    public bool Control { get; init; }
+    public bool Island { get; init; }
+    public int? MinPopulation { get; init; }
+    public int? MaxPopulation { get; init; }
+    /// <summary>Genealogy JSONL (T2.7a), appended.</summary>
+    public string? GenealogyFile { get; init; }
 
     public static Options Parse(string[] args)
     {
@@ -185,6 +207,12 @@ internal sealed record Options
                 "--save-every" => o with { SaveEvery = NextInt() },
                 "--max-minutes" => o with { MaxMinutes = double.Parse(Next(), CultureInfo.InvariantCulture) },
                 "--report-every" => o with { ReportEvery = NextInt() },
+                "--no-births" => o with { NoBirths = true },
+                "--control" => o with { Control = true },
+                "--island" => o with { Island = true },
+                "--min-population" => o with { MinPopulation = NextInt() },
+                "--max-population" => o with { MaxPopulation = NextInt() },
+                "--genealogy" => o with { GenealogyFile = Next() },
                 _ => throw new ArgumentException($"unknown option {args[i]}")
             };
         }

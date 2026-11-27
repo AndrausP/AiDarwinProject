@@ -8,7 +8,8 @@ namespace CreatureIA.Core.Genetics;
 public static class Reproduction
 {
     /// <summary>Distance at which the child's viability has dropped to e^-1 (~37 %).</summary>
-    public const float DefaultSpeciesDistance = 0.15f;
+    // 0.06 (etapa 2, 33 loci): founders A and B differ by ~0.09 (hybrids ~10 % viable); kin and one-species mates ~0.01 (~97 %).
+    public const float DefaultSpeciesDistance = 0.06f;
 
     /// <summary>Haploid gamete: per chromosome, copy one parental strand, switching strands at crossovers.</summary>
     public static Allele[] Gamete(Genome parent, SimRandom rng, MutationStats? stats = null)

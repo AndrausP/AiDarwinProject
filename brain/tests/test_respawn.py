@@ -36,3 +36,15 @@ def test_should_never_reuse_ids_when_deaths_repeat() -> None:
 
 def test_should_not_spawn_when_nobody_dies() -> None:
     assert Respawner().spawns_for(Step(0, (1,), (_obs(),))) == ()
+
+
+def test_should_stay_in_brain_id_range_when_simulator_births_appear() -> None:
+    from creature_brain import SIMULATOR_ID_BASE
+
+    respawner = Respawner()
+    born = SIMULATOR_ID_BASE + 7
+    respawner.spawns_for(Step(0, (1, 2, born), (_obs(), _obs(), _obs())))
+
+    spawns = respawner.spawns_for(Step(1, (2, born), (_obs(), _obs()), (_death(1),)))
+
+    assert [spawn.creature_id for spawn in spawns] == [3]

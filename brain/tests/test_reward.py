@@ -120,3 +120,28 @@ def test_should_reject_negative_motivation_when_weights_are_given() -> None:
     bad[0, 7] = -1.0
     with pytest.raises(ValueError):
         reward.compute_totals(rows, rows, np.zeros(1, dtype=bool), bad)
+
+def test_should_reward_care_when_creature_feeds_its_young() -> None:
+    import numpy as np
+
+    reward = HomeostaticReward()
+    rows = np.tile(np.array([0.8, 0.8, 37.0, 1, 1, 1, 0.15, 0.0, 0.0, 0.1, 1, 0.0]), (2, 1))
+    motivations = reward.default_motivations(2)
+    motivations[1, 8] = 0.0  # second individual does not care about its young
+    fed = np.array([0.01, 0.01])
+
+    totals = reward.compute_totals(rows, rows, np.zeros(2, dtype=bool), motivations, fed)
+
+    assert totals[0] > 0.0
+    assert totals[1] == pytest.approx(0.0)
+
+
+def test_should_reward_mating_when_libido_drops_to_setpoint() -> None:
+    import numpy as np
+
+    reward = HomeostaticReward()
+    before = np.array([[0.8, 0.8, 37.0, 1, 1, 1, 0.15, 0.0, 0.9, 0.3, 1, 0.0]])
+    after = before.copy()
+    after[0, 8] = 0.0  # mating satisfies libido
+
+    assert reward.compute_totals(before, after, np.zeros(1, dtype=bool))[0] > 0.2

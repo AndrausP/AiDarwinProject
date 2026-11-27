@@ -54,6 +54,15 @@ public sealed class GeneCatalog
     public int Count => Genes.Count;
     public int IndexOf(string name) => _index.TryGetValue(name, out var i) ? i : throw new KeyNotFoundException(name);
 
+    /// <summary>Prefix of the motivation loci (reward weights), shown to the brain apart from the body genes.</summary>
+    public const string MotivationPrefix = "m_";
+    /// <summary>Motivation order of the protocol and of the brain reward.</summary>
+    public static readonly string[] MotivationOrder =
+        { "m_energy", "m_water", "m_temperature", "m_integrity", "m_fatigue", "m_libido", "m_pain", "m_fear", "m_care" };
+    /// <summary>Indices of the body/life genes (everything but motivations), in catalog order.</summary>
+    public int[] BodyGeneIndices() => Genes.Select((g, i) => (g, i)).Where(p => !p.g.Name.StartsWith(MotivationPrefix)).Select(p => p.i).ToArray();
+    public int[] MotivationIndices() => MotivationOrder.Select(IndexOf).ToArray();
+
     /// <summary>
     /// Starting catalog for etapa 2 (body and life-cycle loci are added by T2.2b/T2.2c). Values in
     /// natural units; the mutation rate is itself heritable and starts at 1 % per allele.
@@ -67,7 +76,24 @@ public sealed class GeneCatalog
         new GeneDefinition("color_hue", 0f, 1f, 0.5f, Chromosome: 2, Position: 0.7f),
         new GeneDefinition("longevity_years", 0.5f, 30f, 3f, Chromosome: 3, Position: 0f),
         new GeneDefinition("maturity_years", 0.1f, 6f, 0.4f, Chromosome: 3, Position: 0.4f),
-        new GeneDefinition("fear_weight", 0f, 1f, 0.3f, Chromosome: 4, Position: 0f),
+        // Motivations (D3, T2.2e): the individual's reward weights, prefixed "m_" (protocol v3 motivations block).
+        // Defaults = brain RewardConfig; libido has setpoint 0 (mating satisfies), care rewards feeding own young.
+        new GeneDefinition("m_energy", 0f, 2f, 1f, Chromosome: 4, Position: 0f),
+        new GeneDefinition("m_water", 0f, 2f, 1f, Chromosome: 4, Position: 0.1f),
+        new GeneDefinition("m_temperature", 0f, 0.5f, 0.08f, Chromosome: 4, Position: 0.2f),
+        new GeneDefinition("m_integrity", 0f, 3f, 1.25f, Chromosome: 4, Position: 0.3f),
+        new GeneDefinition("m_fatigue", 0f, 1f, 0.35f, Chromosome: 4, Position: 0.4f),
+        new GeneDefinition("m_libido", 0f, 1f, 0.3f, Chromosome: 4, Position: 0.5f),
+        new GeneDefinition("m_pain", 0f, 1.5f, 0.5f, Chromosome: 4, Position: 0.6f),
+        new GeneDefinition("m_fear", 0f, 1f, 0.3f, Chromosome: 4, Position: 0.7f),
+        new GeneDefinition("m_care", 0f, 2f, 0.5f, Chromosome: 4, Position: 0.8f),
+        // Diet (T2.5): 0 herbivore … 1 carnivore; digestion of plants falls as meat digestion rises.
+        new GeneDefinition("carnivory", 0f, 1f, 0f, Chromosome: 10, Position: 0f),
+        // Reproduction (T2.2c): litter size, gestation in days, breeding season peak (year phase) and width (1 = all year).
+        new GeneDefinition("litter_size", 1f, 6f, 2f, Chromosome: 11, Position: 0f),
+        new GeneDefinition("gestation_days", 0.1f, 4f, 0.5f, Chromosome: 11, Position: 0.3f),
+        new GeneDefinition("breeding_peak", 0f, 1f, 0.4f, Chromosome: 11, Position: 0.6f),
+        new GeneDefinition("breeding_width", 0.1f, 1f, 1f, Chromosome: 11, Position: 0.8f),
         // Body parts (T2.2b). Dormant parts start at 0 and only work above BodyPlan.FunctionalThreshold.
         new GeneDefinition("claws", 0f, 1f, 0f, Chromosome: 5, Position: 0f),
         new GeneDefinition("carapace", 0f, 1f, 0f, Chromosome: 5, Position: 0.3f),

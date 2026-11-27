@@ -221,6 +221,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5555)
     parser.add_argument("--population", type=int, default=48)
+    parser.add_argument("--slot-capacity", type=int, default=0,
+                        help="agent slots kept for a growing population (births); 0 = creatures present")
     parser.add_argument("--time-scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--policy", choices=("random", "ppo"), default="random")
@@ -277,6 +279,7 @@ def main() -> None:
                     curiosity=CuriosityConfig(weight=args.curiosity),
                     frozen=args.freeze,
                     deterministic_actions=args.deterministic,
+                    slot_capacity=args.slot_capacity,
                 ),
                 ppo_config=PPOConfig(learning_rate=args.lr, amp=args.amp),
             )

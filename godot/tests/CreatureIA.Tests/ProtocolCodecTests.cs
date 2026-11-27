@@ -9,8 +9,8 @@ public sealed class ProtocolCodecTests
     [Test]
     public void Should_MatchGoldenFixture_When_EncodingHello()
     {
-        var expected = Convert.FromHexString("0f00000001030064040d000807060504030201");
-        var actual = ProtocolCodec.Encode(new HelloMessage(3, 1124, 13, 0x0102030405060708));
+        var expected = Convert.FromHexString("0f00000001030069040d000807060504030201");
+        var actual = ProtocolCodec.Encode(new HelloMessage(3, 1129, 13, 0x0102030405060708));
         Assert.That(actual, Is.EqualTo(expected));
     }
 
@@ -32,7 +32,7 @@ public sealed class ProtocolCodecTests
     [Test]
     public void Should_RejectFrame_When_LengthPrefixDoesNotMatch()
     {
-        var frame = ProtocolCodec.Encode(new HelloMessage(3, 1124, 13, 1));
+        var frame = ProtocolCodec.Encode(new HelloMessage(3, 1129, 13, 1));
         frame[0]++;
         Assert.Throws<InvalidDataException>(() => ProtocolCodec.Decode(frame));
     }
