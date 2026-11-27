@@ -306,34 +306,38 @@ public sealed class SimWorld
 
     /// <summary>Founders of one species start together, within this radius of their herd centre (worlds with births).</summary>
     public const float HerdRadiusMeters = 10f;
-    private readonly Dictionary<FounderSpecies, Vector3> _herdCenters = new();
 
     /// <summary>
-    /// Where a founder appears when births are on: animals of one species live in herds, so founders start near
-    /// their herd centre and rescues next to a living member of their species (spread over the whole map, a
-    /// receptive female met a fertile male within mating reach 9 times in 160 000 female-ticks). Null = anywhere.
+    /// Where a founder or a rescue appears when births are on: animals of one species live in herds, so they
+    /// start near their herd's home range (spread over the whole map, a receptive female met a fertile male
+    /// within mating reach 9 times in 160 000 female-ticks). Null = anywhere (worlds without births).
     /// </summary>
-    private Vector3? HerdPlace(FounderSpecies species, bool rescue)
+    private Vector3? HerdPlace(FounderSpecies species)
     {
         if (!Settings.Births) return null;
-        Vector3 center;
-        if (rescue)
-        {
-            var member = _creatures.FirstOrDefault(c => c.IsAlive && c.Lineage == species);
-            if (member is null) return null;
-            center = member.Position;
-        }
-        else if (!_herdCenters.TryGetValue(species, out center))
-        {
-            center = Terrain.RandomLandPoint(_spawnRng, Settings.SpawnExtentMeters);
-            _herdCenters[species] = center;
-        }
+        var center = HerdHome(species);
         return Terrain.RandomLandPointAround(_spawnRng, center.X, center.Z, HerdRadiusMeters) + Vector3.UnitY * 0.05f;
+    }
+
+    /// <summary>
+    /// Home range of a founding species: on the shore of a lake that never dries (herds far from water died of
+    /// thirst before breeding, b3-mlp: 0.16 % of the time near water). A pure function of the world, so it needs no
+    /// snapshot. Geography, not behaviour: where they go from there is the brain's choice.
+    /// </summary>
+    public Vector3 HerdHome(FounderSpecies species)
+    {
+        var lakes = Terrain.World.Lakes.Where(l => l.RadiusMeters >= SimTerrain.ShallowLakeRadiusMeters).ToList();
+        if (lakes.Count == 0) lakes = Terrain.World.Lakes.ToList();
+        if (lakes.Count == 0) return Terrain.RandomLandPoint(new SimRandom((ulong)Settings.Seed, stream: 13), Settings.SpawnExtentMeters);
+        var lake = lakes[(int)species % lakes.Count];
+        var angle = (int)species * 2.1f;
+        var reach = lake.RadiusMeters + HerdRadiusMeters;
+        return new Vector3(lake.CenterX + MathF.Cos(angle) * reach, 0f, lake.CenterZ + MathF.Sin(angle) * reach);
     }
 
     private SimCreature AddFounder(uint id, Genome genome, FounderSpecies species, Vector3? position, bool rescue)
     {
-        var place = position ?? HerdPlace(species, rescue) ?? Terrain.RandomLandPoint(_spawnRng, Settings.SpawnExtentMeters) + Vector3.UnitY * 0.05f;
+        var place = position ?? HerdPlace(species) ?? Terrain.RandomLandPoint(_spawnRng, Settings.SpawnExtentMeters) + Vector3.UnitY * 0.05f;
         var creature = new SimCreature(id, place, genome, species) { Yaw = _spawnRng.Range(0f, MathF.Tau) };
         // Founders start as young adults (between maturity and 1.5× maturity) so the first generation can breed.
         creature.SetAgeForFounder(creature.Life.MaturityYears * LifeCycle.SecondsPerYear * _spawnRng.Range(1f, 1.5f));
