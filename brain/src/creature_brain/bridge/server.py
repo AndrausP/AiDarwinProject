@@ -239,6 +239,7 @@ def _parse_args() -> argparse.Namespace:
                         help="PPO gru only: weight of the novelty (RND) bonus; 0 (default since T1.1) disables curiosity")
     parser.add_argument("--freeze", action="store_true",
                         help="PPO only: frozen evaluation (fixed weights/normalisers, no updates, no checkpoint writes)")
+    parser.add_argument("--amp", action="store_true", help="PPO gru only: fp16 autocast in the update (T2.0e, CUDA)")
     parser.add_argument("--deterministic", action="store_true", help="PPO only: act with the policy mean")
     parser.add_argument("--lr", type=float, default=3e-4,
                         help="PPO only: Adam learning rate for new runs (a resumed checkpoint keeps its optimizer state)")
@@ -277,7 +278,7 @@ def main() -> None:
                     frozen=args.freeze,
                     deterministic_actions=args.deterministic,
                 ),
-                ppo_config=PPOConfig(learning_rate=args.lr),
+                ppo_config=PPOConfig(learning_rate=args.lr, amp=args.amp),
             )
             logging.getLogger(__name__).info(
                 "brain=%s parameters=%d curiosity=%.3f lr=%.2e frozen=%s update=%d",

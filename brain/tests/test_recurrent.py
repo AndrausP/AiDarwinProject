@@ -203,3 +203,36 @@ def test_should_keep_weights_and_checkpoint_when_evaluation_is_frozen(tmp_path, 
 def test_should_refuse_frozen_evaluation_when_checkpoint_is_missing(tmp_path) -> None:
     with pytest.raises(ValueError):
         OnlinePPOPolicy(online_config=OnlinePPOConfig(checkpoint_path=tmp_path / "none.pt", frozen=True))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="fp16 autocast needs CUDA")
+def test_should_match_fp32_update_closely_when_amp_is_enabled() -> None:
+    from creature_brain.learning.ppo import PPOConfig
+    from creature_brain.learning.recurrent import RecurrentPPOTrainer, SequenceBatch
+
+    def run(amp: bool):
+        torch.manual_seed(3)
+        model = RecurrentActorCritic().cuda()
+        trainer = RecurrentPPOTrainer(model, PPOConfig(amp=amp, epochs=1), seed=0)
+        g = torch.Generator(device="cuda").manual_seed(5)
+        t, n = 16, 8
+        starts = torch.zeros(t, n, dtype=torch.bool, device="cuda")
+        starts[0] = True
+        batch = SequenceBatch(
+            torch.randn(t, n, OBSERVATION_DIM, device="cuda", generator=g),
+            torch.randn(t, n, ACTION_DIM, device="cuda", generator=g),
+            torch.randn(t, n, device="cuda", generator=g) - 8.0,
+            torch.randn(t, n, device="cuda", generator=g),
+            torch.randn(t, n, device="cuda", generator=g),
+            torch.ones(t, n, dtype=torch.bool, device="cuda"),
+            starts,
+            torch.zeros(n, 512, device="cuda"),
+        )
+        return trainer.update(batch), model
+
+    full, full_model = run(False)
+    half, half_model = run(True)
+
+    assert abs(half.value_loss - full.value_loss) < 0.05 * max(1.0, abs(full.value_loss))
+    assert abs(half.entropy - full.entropy) < 1e-3
+    assert all(torch.isfinite(p).all() for p in half_model.parameters())

@@ -140,6 +140,9 @@ class PPOConfig:
     max_gradient_norm: float = 0.5
     epochs: int = 4
     minibatch_size: int = 1024  # 3072-sample rollouts -> 3 minibatches x 4 epochs
+    # T2.0e: fp16 autocast for the network forward in the brain v3 update (CUDA only). Log-probs,
+    # ratios and losses stay fp32; a GradScaler guards the backward. Off until validated on a seed-0 eval.
+    amp: bool = False
 
 
 @dataclass(slots=True)

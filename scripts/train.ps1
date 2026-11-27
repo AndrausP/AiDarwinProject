@@ -20,6 +20,7 @@ param(
     [double]$LearningRate = 3e-4,
     [double]$MaxMinutes = 0,        # also stop cleanly after this many wall-clock minutes (0 = no limit)
     [switch]$NoRespawn,
+    [switch]$Amp,                   # gru only: fp16 autocast in the update (T2.0e; validate on a seed-0 eval first)
     [switch]$NoBuild                # skip the Release build (parallel runs: build once beforehand)
 )
 $ErrorActionPreference = "Stop"
@@ -56,6 +57,7 @@ if ($Policy -eq "ppo") {
     $serverArgs += @("--brain", $Brain, "--device", $Device, "--checkpoint", (Join-Path $runDir "ppo.pt"),
         "--metrics", (Join-Path $runDir "metrics.csv"), "--curiosity", $Curiosity.ToString($inv), "--lr", $LearningRate.ToString($inv))
 }
+if ($Amp -and $Policy -eq "ppo") { $serverArgs += "--amp" }
 $env:PYTHONPATH = Join-Path $root "brain\src"
 $server = Start-Process -FilePath $python -ArgumentList $serverArgs -NoNewWindow -PassThru `
     -RedirectStandardError (Join-Path $runDir "server.log") -RedirectStandardOutput (Join-Path $runDir "server.out")

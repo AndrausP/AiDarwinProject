@@ -112,9 +112,12 @@ class RecurrentActorCritic(nn.Module):
         return action, raw, squashed_log_probability(raw, mean, log_std, action), value, new_hidden
 
     def evaluate_sequence(
-        self, observations: Tensor, raw_actions: Tensor, initial_hidden: Tensor, starts: Tensor
+        self, observations: Tensor, raw_actions: Tensor, initial_hidden: Tensor, starts: Tensor, *, amp: bool = False
     ) -> tuple[Tensor, Tensor, Tensor]:
-        mean, log_std, value = self.sequence(observations, initial_hidden, starts)
+        with torch.autocast("cuda", dtype=torch.float16, enabled=amp):
+            mean, log_std, value = self.sequence(observations, initial_hidden, starts)
+        # Probability maths in fp32: PPO ratios are exp(differences) and lose precision in fp16.
+        mean, log_std, value = mean.float(), log_std.float(), value.float()
         actions = torch.tanh(raw_actions)
         log_probability = squashed_log_probability(raw_actions, mean, log_std, actions)
         entropy = (log_std + 0.5 * (1.0 + np.log(2.0 * np.pi))).sum(dim=-1)
@@ -254,6 +257,8 @@ class RecurrentPPOTrainer:
         )
         self.generator = torch.Generator(device=next(model.parameters()).device)
         self.generator.manual_seed(seed)
+        self.amp = bool(config.amp) and next(model.parameters()).device.type == "cuda"
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self.amp)
 
     def update(self, batch: SequenceBatch) -> UpdateMetrics:
         config = self.config
@@ -265,7 +270,7 @@ class RecurrentPPOTrainer:
                 mask = mb.valid.to(torch.float32)
                 count = mask.sum().clamp_min(1.0)
                 log_probability, entropy, value = self.model.evaluate_sequence(
-                    mb.observations, mb.actions, mb.initial_hidden, mb.starts
+                    mb.observations, mb.actions, mb.initial_hidden, mb.starts, amp=self.amp
                 )
                 ratio = (log_probability - mb.old_log_probabilities).exp()
                 unclipped = ratio * mb.advantages
@@ -277,9 +282,11 @@ class RecurrentPPOTrainer:
                 if not torch.isfinite(loss):
                     raise FloatingPointError("non-finite PPO loss")
                 self.optimizer.zero_grad(set_to_none=True)
-                loss.backward()
+                self.scaler.scale(loss).backward()
+                self.scaler.unscale_(self.optimizer)  # clip the true gradient, not the scaled one
                 norm = nn.utils.clip_grad_norm_(self.model.parameters(), config.max_gradient_norm)
-                self.optimizer.step()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
                 policy_losses.append(float(policy_loss.detach()))
                 value_losses.append(float(value_loss.detach()))
                 entropies.append(float(entropy_mean.detach()))
