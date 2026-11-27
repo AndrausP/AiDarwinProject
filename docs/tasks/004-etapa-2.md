@@ -29,7 +29,7 @@
 | T2.2b | Fenótipo → corpo modular: partes, genes adormecidos com limiar funcional, efeitos (velocidade, degrau, escalar, cavar, armadura, pelo), custo Kleiber, dimorfismo por sexo; visual voxel montado | T2.2a | `BodyPlan` + visual | testes de custo (nenhum traço grátis) |
 | T2.2c | Ciclo de vida: longevidade em anos, maturidade, ninhada, intervalo, gestação/gema, crescimento, senescência (Gompertz), estação reprodutiva, hibernação/torpor | T2.2a, T2.1c | genes + fisiologia | testes analíticos (curva de sobrevivência Gompertz) |
 | T2.2d | Acuidade dos sentidos por gene (alcance e ângulo da visão, visão noturna, olfato, audição), com custo | T2.2a, T2.0a | genes + Senses | testes |
-| T2.2e | Motivações como genes (D3): pesos da recompensa por indivíduo | D3, T2.2a | genes + `reward.py` | teste: pesos diferentes → recompensas diferentes |
+| T2.2e | Motivações como genes (D3): pesos da recompensa por indivíduo | D3, T2.2a | genes + `reward.py` | teste: pesos diferentes → recompensas diferentes · **✅ lado Python 2026-11-27** (`compute_totals(..., motivations)`; falta vir do genoma via protocolo v3) |
 | **T2.3** | **Protocolo v3**: + genes expressos (vetor fixo do catálogo), fotoperíodo e tendência, sinais sociais por setor (parente, sexo, maduro, filhote), pesos de motivação; ações acasalar e alimentar ativas | T2.1c, T2.2b–e | `contracts/protocol-v3.json` + fixture + codecs C#/Py | testes de round-trip nos dois lados |
 | **T2.4** | **Reprodução e população** | | | |
 | T2.4a | Acasalar (condições do plano), gestação ou ovo, nascimento junto da mãe, alimentar filhote, reconhecimento de parente pelo cheiro de família | T2.3 | Core + testes | teste: casal compatível gera filho com genes dos dois |

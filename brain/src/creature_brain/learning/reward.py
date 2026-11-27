@@ -97,9 +97,24 @@ class HomeostaticReward:
         total = homeostatic - pain_penalty - fear_penalty - death_penalty
         return RewardResult(total, homeostatic, pain_penalty, fear_penalty, death_penalty)
 
-    def compute_totals(self, previous: np.ndarray, current: np.ndarray, died: np.ndarray) -> np.ndarray:
+    #: Column order of per-individual motivation weights (T2.2e, decision D3: weights become genes).
+    MOTIVATION_ORDER = ("energy", "water", "temperature", "integrity", "fatigue", "libido", "pain", "fear")
+
+    def default_motivations(self, count: int) -> np.ndarray:
+        """(count, 8) weights equal to this config: what every individual has until genes exist."""
+        c = self.config
+        row = [c.energy_weight, c.water_weight, c.temperature_weight, c.integrity_weight,
+               c.fatigue_weight, c.libido_weight, c.pain_weight, c.fear_weight]
+        return np.tile(np.asarray(row, dtype=np.float64), (count, 1))
+
+    def compute_totals(
+        self, previous: np.ndarray, current: np.ndarray, died: np.ndarray, motivations: np.ndarray | None = None
+    ) -> np.ndarray:
         """Vectorised ``compute(...).total`` for N creatures: (N, 12) arrays and an (N,) bool mask.
-        Same formula as :meth:`compute`; per-creature Python was ~20 ms per tick at 288 creatures."""
+        Same formula as :meth:`compute`; per-creature Python was ~20 ms per tick at 288 creatures.
+
+        ``motivations`` (N, 8), in :attr:`MOTIVATION_ORDER`, gives each individual its own weights
+        (motivations as genes, D3); None uses the config for everyone."""
         previous = np.asarray(previous, dtype=np.float64)
         current = np.asarray(current, dtype=np.float64)
         if previous.ndim != 2 or previous.shape[1] != INTEROCEPTION_DIM or previous.shape != current.shape:
@@ -109,16 +124,21 @@ class HomeostaticReward:
         config = self.config
         setpoints = np.array([config.energy_setpoint, config.water_setpoint, config.temperature_setpoint,
                               config.integrity_setpoint, config.fatigue_setpoint, config.libido_setpoint])
-        weights = np.array([config.energy_weight, config.water_weight, config.temperature_weight,
-                            config.integrity_weight, config.fatigue_weight, config.libido_weight])
+        if motivations is None:
+            motivations = self.default_motivations(previous.shape[0])
+        motivations = np.asarray(motivations, dtype=np.float64)
+        if motivations.shape != (previous.shape[0], len(self.MOTIVATION_ORDER)):
+            raise ValueError(f"motivations must be (N, {len(self.MOTIVATION_ORDER)})")
+        if not np.isfinite(motivations).all() or (motivations < 0).any():
+            raise ValueError("motivation weights must be finite and non-negative")
 
         def drives(values: np.ndarray) -> np.ndarray:
             integrity = (values[:, 3] + values[:, 4] + values[:, 5]) / 3.0
             return np.stack((values[:, 0], values[:, 1], values[:, 2], integrity, values[:, 6], values[:, 8]), axis=1)
 
-        homeostatic = ((np.abs(drives(previous) - setpoints) - np.abs(drives(current) - setpoints)) * weights).sum(axis=1)
-        pain_penalty = config.pain_weight * np.maximum(current[:, 7], 0.0)
-        fear_penalty = config.fear_weight * np.clip(current[:, 11], 0.0, 1.0)
+        homeostatic = ((np.abs(drives(previous) - setpoints) - np.abs(drives(current) - setpoints)) * motivations[:, :6]).sum(axis=1)
+        pain_penalty = motivations[:, 6] * np.maximum(current[:, 7], 0.0)
+        fear_penalty = motivations[:, 7] * np.clip(current[:, 11], 0.0, 1.0)
         death_penalty = np.where(np.asarray(died, dtype=bool), config.death_penalty, 0.0)
         return homeostatic - pain_penalty - fear_penalty - death_penalty
 
