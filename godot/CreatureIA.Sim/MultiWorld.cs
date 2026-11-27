@@ -102,6 +102,8 @@ public sealed class MultiWorld
         {
             var p = world.Population;
             total.Births += p.Births; total.Conceptions += p.Conceptions; total.Inviable += p.Inviable;
+            total.ReceptiveTicks += p.ReceptiveTicks; total.FertileMaleTicks += p.FertileMaleTicks;
+            total.MaleMateChoices += p.MaleMateChoices; total.MateOpportunities += p.MateOpportunities;
             total.Rescues += p.Rescues; total.Deaths += p.Deaths; total.MaxGeneration = Math.Max(total.MaxGeneration, p.MaxGeneration);
         }
         return total;

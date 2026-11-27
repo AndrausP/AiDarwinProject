@@ -100,6 +100,23 @@ public sealed class SimTerrain
     }
 
     /// <summary>A random dry, walkable spot (not water, not a tree top) inside <paramref name="extent"/> of the centre.</summary>
+    /// <summary>A dry land point within <paramref name="radius"/> of (cx, cz); falls back to the centre.</summary>
+    public Vector3 RandomLandPointAround(SimRandom rng, float cx, float cz, float radius)
+    {
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            var x = cx + rng.Range(-radius, radius);
+            var z = cz + rng.Range(-radius, radius);
+            var sample = Sample(x, z);
+            if (sample.WaterDepth > 0f) continue;
+            var (bx, _, bz) = Grid.WorldToBlock(x, 0f, z);
+            var top = Grid.TopBlockY(bx, bz, solidOnly: true);
+            if (BlockTypes.IsTreePart(Grid.Get(bx, top, bz))) continue;
+            return new Vector3(x, sample.Height, z);
+        }
+        return new Vector3(cx, Sample(cx, cz).Height, cz);
+    }
+
     public Vector3 RandomLandPoint(SimRandom rng, float extent, Func<BiomeSample, bool>? accept = null)
     {
         for (var attempt = 0; attempt < 400; attempt++)

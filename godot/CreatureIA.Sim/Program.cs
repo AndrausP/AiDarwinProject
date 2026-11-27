@@ -130,6 +130,8 @@ var report = string.Create(CultureInfo.InvariantCulture,
     $"\"thirsty_share\": {exploits.Share(exploits.Thirsty):F6}, " +
     $"\"near_water_when_thirsty\": {ExploitCounters.Ratio(exploits.ThirstyNearWater, exploits.Thirsty):F6}, " +
     $"\"births\": {population.Births}, \"conceptions\": {population.Conceptions}, \"inviable\": {population.Inviable}, " +
+    $"\"receptive_ticks\": {population.ReceptiveTicks}, \"fertile_male_ticks\": {population.FertileMaleTicks}, " +
+    $"\"male_mate_choices\": {population.MaleMateChoices}, \"mate_opportunities\": {population.MateOpportunities}, " +
     $"\"rescues\": {population.Rescues}, \"deaths\": {population.Deaths}, \"max_generation\": {population.MaxGeneration}, \"live\": {worlds.LiveCount}}}");
 Console.Error.WriteLine($"[exploits] {report}");
 if (options.ReportFile is not null) File.WriteAllText(options.ReportFile, report + Environment.NewLine);

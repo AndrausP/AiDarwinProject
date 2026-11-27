@@ -62,6 +62,15 @@ public sealed class PopulationCounters
     public long Rescues;
     public long Deaths;
     public int MaxGeneration;
+    // Mating diagnostics, per brain tick (not in snapshots: they restart with each Sim session).
+    /// <summary>Female-ticks in heat (receptive).</summary>
+    public long ReceptiveTicks;
+    /// <summary>Fertile-male-ticks (mature, fed).</summary>
+    public long FertileMaleTicks;
+    /// <summary>Fertile-male-ticks choosing to mate (action 8 &gt; 0.5).</summary>
+    public long MaleMateChoices;
+    /// <summary>Receptive-female-ticks with a fertile male within mating reach (whatever he chose).</summary>
+    public long MateOpportunities;
 }
 
 public sealed record SimWorldSettings
@@ -295,9 +304,36 @@ public sealed class SimWorld
         return AddFounder(id, genome, species, position, rescue: false);
     }
 
+    /// <summary>Founders of one species start together, within this radius of their herd centre (worlds with births).</summary>
+    public const float HerdRadiusMeters = 10f;
+    private readonly Dictionary<FounderSpecies, Vector3> _herdCenters = new();
+
+    /// <summary>
+    /// Where a founder appears when births are on: animals of one species live in herds, so founders start near
+    /// their herd centre and rescues next to a living member of their species (spread over the whole map, a
+    /// receptive female met a fertile male within mating reach 9 times in 160 000 female-ticks). Null = anywhere.
+    /// </summary>
+    private Vector3? HerdPlace(FounderSpecies species, bool rescue)
+    {
+        if (!Settings.Births) return null;
+        Vector3 center;
+        if (rescue)
+        {
+            var member = _creatures.FirstOrDefault(c => c.IsAlive && c.Lineage == species);
+            if (member is null) return null;
+            center = member.Position;
+        }
+        else if (!_herdCenters.TryGetValue(species, out center))
+        {
+            center = Terrain.RandomLandPoint(_spawnRng, Settings.SpawnExtentMeters);
+            _herdCenters[species] = center;
+        }
+        return Terrain.RandomLandPointAround(_spawnRng, center.X, center.Z, HerdRadiusMeters) + Vector3.UnitY * 0.05f;
+    }
+
     private SimCreature AddFounder(uint id, Genome genome, FounderSpecies species, Vector3? position, bool rescue)
     {
-        var place = position ?? Terrain.RandomLandPoint(_spawnRng, Settings.SpawnExtentMeters) + Vector3.UnitY * 0.05f;
+        var place = position ?? HerdPlace(species, rescue) ?? Terrain.RandomLandPoint(_spawnRng, Settings.SpawnExtentMeters) + Vector3.UnitY * 0.05f;
         var creature = new SimCreature(id, place, genome, species) { Yaw = _spawnRng.Range(0f, MathF.Tau) };
         // Founders start as young adults (between maturity and 1.5× maturity) so the first generation can breed.
         creature.SetAgeForFounder(creature.Life.MaturityYears * LifeCycle.SecondsPerYear * _spawnRng.Range(1f, 1.5f));
@@ -390,6 +426,7 @@ public sealed class SimWorld
     /// </summary>
     private void ResolveMating()
     {
+        CountMatingDiagnostics();
         if (PopulationIncludingUnborn() >= Settings.MaxPopulation) return;
         foreach (var female in _creatures)
         {
@@ -409,6 +446,17 @@ public sealed class SimWorld
             Conceive(female, best);
             if (PopulationIncludingUnborn() >= Settings.MaxPopulation) return;
         }
+    }
+
+    private void CountMatingDiagnostics()
+    {
+        RefreshMateSources();
+        Population.ReceptiveTicks += _receptiveFemales.Count;
+        Population.FertileMaleTicks += _fertileMales.Count;
+        foreach (var male in _fertileMales) if (male.WantsToMate) Population.MaleMateChoices++;
+        var reach = Mating.MaxDistanceMeters * Mating.MaxDistanceMeters;
+        foreach (var female in _receptiveFemales)
+            if (_fertileMales.Any(m => Vector3.DistanceSquared(m.Position, female.Position) <= reach)) Population.MateOpportunities++;
     }
 
     /// <summary>

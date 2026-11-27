@@ -163,6 +163,21 @@ public sealed class PopulationTests
     }
 
     [Test]
+    public void Should_StartSpeciesInHerds_When_BirthsAreOn()
+    {
+        var world = new SimWorld(new SimWorldSettings { Seed = 5, Population = 48, Plants = 600, Lakes = 6, Births = true }, null);
+
+        foreach (var herd in world.Creatures.GroupBy(c => c.Lineage))
+        {
+            var members = herd.ToList();
+            var cx = members.Average(c => c.Position.X);
+            var cz = members.Average(c => c.Position.Z);
+            Assert.That(members.Max(c => MathF.Sqrt(MathF.Pow(c.Position.X - (float)cx, 2) + MathF.Pow(c.Position.Z - (float)cz, 2))),
+                Is.LessThan(2f * SimWorld.HerdRadiusMeters * 1.5f), $"herd {herd.Key}");
+        }
+    }
+
+    [Test]
     public void Should_RescueFromArchive_When_PopulationFallsBelowMinimum()
     {
         var world = EmptyWorld(minimum: 6);
