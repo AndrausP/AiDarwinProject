@@ -139,3 +139,17 @@ Cada entrada: sintoma → causa verificada → correção. Data da descoberta en
 - **Sintoma:** vida média aleatória 349 s (Sim) × 376 s (Godot) num primeiro teste.
 - **Verificação:** sonda que registra energia, água, temperatura, sono e vivas por tick: curvas iguais do nascimento à extinção (144 → 95 → 56 → 15 vivas). A diferença vinha do sorteio de spawn/plantas (RNG próprio do Sim, PCG32), não da física.
 - **Lição:** validar ambiente novo por trajetória média por tick com a mesma política, não por um único número de resumo.
+
+### Treino longo desaprende: desvio-padrão da ação sobe até o teto (2026-11-27, manhã)
+- **Sintoma:** nos treinos de ~4 h (`night-v2` 6 400 updates, `night-v3` 3 700), a vida média no treino **caiu** por
+  quarto: v2 755 → 616 → 556 → 451 s; v3 828 → 732 → 658 → 545 s. `reward_mean` piorou de −0,0007 para −0,0058.
+- **Diagnóstico:** a entropia em `metrics.csv` subiu de ~10 para **17,027 = 12 × (0 + ½·ln 2πe)**, ou seja, as 12 ações
+  com `log_std` no teto `LOG_STD_MAX = 0` (σ = 1 antes do tanh). O v2 travou nesse valor na metade do run.
+- **Causa:** o bônus de entropia é medido na gaussiana **antes do tanh**. Com a ação saturada, aumentar σ quase não muda
+  o efeito, mas aumenta a entropia de graça. Com recompensa por passo muito pequena, o bônus (0,0005 × 17) vence o
+  gradiente da política no `log_std` e a política vira quase aleatória ao amostrar.
+- **Correção proposta (não aplicada sem medir):** coeficiente de entropia bem menor (ou zero) em runs longos,
+  teto do `log_std` mais baixo (ex. −0,5), e monitor que acusa entropia perto do teto. Avaliar sempre também em modo
+  determinístico (`-Deterministic`), que mostra o que a média da política aprendeu.
+- **Lição:** "treinar mais" não é monotônico. Acompanhar entropia e vida por quarto, e guardar checkpoints
+  intermediários para escolher o melhor na seed 0.
