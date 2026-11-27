@@ -26,4 +26,31 @@ Nenhuma dessas é script de comportamento. O cérebro continua decidindo tudo, e
 | C | Seleção × controle (`stage2.ps1`) | Só depois de B dar resultado |
 
 ## Resultados
-(preenchido conforme os treinos curtos terminam)
+### Degrau A: `f1-mlp` (só a correção 1, layout v3, 24 000 ticks, 6 mundos, ~25 min)
+- **Entropia:** 5,45 → 4,9 e caindo. No `p3-mlp`, com a mesma configuração mas sem a correção, ficou parada em 11,9 (o máximo).
+- **Seed 0, 6 réplicas** (`benchmarks/runs/eval-f1`): vida **408 s [393–425]** contra 313 s do aleatório = **1,31× [1,23–1,38]**.
+  - Come com fome: 2× o aleatório. Dorme cansada: 21× o aleatório.
+  - Mortes: fome 58 %, sede 41 %.
+- **Conclusão:** o aprendizado voltou, mas ainda é fraco. A sede continua sendo o gargalo.
+- **Nota:** o `p3-mlp` tem layout 1124 (anterior ao torpor) e não carrega mais. Por isso a comparação é só contra o aleatório. A avaliação rodou numa worktree no commit f98d095 (v3).
+
+### Degrau B: treinos curtos com nascimentos (protocolo v4, MLP, 4 mundos × 48, 24 000 ticks, ~10 min cada)
+| Run | Mudança | Concepções | Nascimentos | Encontros¹ | Macho escolhe acasalar | Mortes: fome / sede |
+|---|---|---|---|---|---|---|
+| `b1` | cascata v4 (feromônio, fêmea receptiva, ordem das necessidades) | 1 | 1 | — | — | — |
+| sonda aleatória | contadores de diagnóstico | 2 | 0 | **9** | 23 % | 81 % / 17 % |
+| sonda aleatória + bandos | fundadores nascem em bandos por espécie | 46 | 42 | 203 | 24 % | — |
+| `b2` | bandos | 33 | 38 | 690 | **12 %** (aprendeu a evitar) | — |
+| `b3` | macho paga 0,02 (antes 0,2); `m_libido` 0,3 → 1,0 | 43 | 39 | 679 | 29 % | 60 % / 37 % |
+| `b4` | bando mora na margem de um lago que não seca | 44 | **67** | 669 | 10 % | **78 % / 21 %** |
+
+¹ Fêmea × tick no cio com macho fértil a ≤ 2 m.
+
+**O que se aprendeu:**
+- O encontro era o gargalo do acasalamento. Com bandos, os encontros subiram de 9 para cerca de 680 por run.
+- A sede caiu com o bando perto do lago: de 37 % para 21 % das mortes.
+- Em todos os runs, os nascimentos acontecem só nos primeiros ~4000 ticks. Depois a população cai para o piso (64), por fome, e quase ninguém chega a energia ≥ 0,55: não há cio nem macho fértil.
+- Os filhotes morrem com ~480 s de idade, em média.
+- No `b4`, o macho voltou a evitar acasalar. Com fome, o alívio da libido quase não vale (pela ordem das necessidades), e o custo continua existindo.
+
+**Gargalo atual: comer.** É o primeiro degrau da cascata ("nasce, quer comer, come"). O próximo treino curto ataca a alimentação: medir "come quando tem fome e há planta perto" e ver se a planta perto do bando acaba.
