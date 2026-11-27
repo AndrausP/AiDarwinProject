@@ -28,8 +28,9 @@ public partial class BiomeMap : Node
         var started = Time.GetTicksMsec();
         World = RunSettings.Showcase
             ? ShowcaseGenerator.Generate(RunSettings.Seed(WorldSeed))
-            : VoxelWorldGenerator.Generate(RunSettings.Seed(WorldSeed),
-                new VoxelWorldSettings { LakeCount = RunSettings.Lakes(LakeCount) });
+            : VoxelWorldGenerator.Generate(RunSettings.Seed(WorldSeed), RunSettings.Island
+                ? new VoxelWorldSettings { Island = true, SizeX = 1536, SizeZ = 1536, SizeY = 128, WaterLevel = 32, LakeCount = 8, RiverCount = 10 }
+                : new VoxelWorldSettings { LakeCount = RunSettings.Lakes(LakeCount) });
         GD.Print($"[voxel] world {World.Settings.WorldSizeX}x{World.Settings.WorldSizeZ} m generated in {Time.GetTicksMsec() - started} ms, lakes={World.Lakes.Count}");
     }
 

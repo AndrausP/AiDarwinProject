@@ -20,7 +20,7 @@
 | T2.0d | Godot como visualizador do Sim (D4): abre um snapshot ou acompanha ao vivo | T2.0c | `watch.ps1 -Sim` | assistir um run do Sim sem re-simular |
 | T2.0e | Cérebro mais barato: fp16 + GRU fundido no treino; benchmark notebook (3050) × desktop (2060) | T1.8 | `--amp`, relatório | ≥ 1,5× atualizações/s sem perda na avaliação · **⏳ 2026-11-27: GRU fundido (update 4,2×) e overhead Python cortado (cérebro 132 → 80 ms/tick); falta fp16** |
 | **T2.1** | **Ilha e clima** | | | |
-| T2.1a | Gerador da ilha: oceano salgado (bloco `SaltWater`), praias, cordilheira nevada, rios das nascentes ao mar, lagos, biomas por clima regional; sem parede | T2.0a | `IslandGenerator` + testes (rio conecta montanha ao mar, mar não mata a sede) | screenshot + testes |
+| T2.1a | Gerador da ilha: oceano salgado (bloco `SaltWater`), praias, cordilheira nevada, rios das nascentes ao mar, lagos, biomas por clima regional; sem parede | T2.0a | `IslandGenerator` + testes (rio conecta montanha ao mar, mar não mata a sede) | screenshot + testes · **✅ 2026-11-27** (5 testes; `benchmarks/screenshots/t2.1a-ilha.png`; `CREATURE_IA_ISLAND=1` só visualização, treino segue no mapa da etapa 1) |
 | T2.1b | Nadar cansa; mar aberto mata por exaustão ou frio (nova causa de morte: afogamento) | T2.1a | fisiologia + protocolo (causa de morte) | teste: nadar indefinidamente leva à morte |
 | T2.1c | Tempo: ano de 12 dias, estações por região, lagos rasos secam e voltam, plantas por região e estação, fotoperíodo | T2.1a | `WorldCycles` por região | testes analíticos de clima e seca |
 | T2.1d | Escala: chunks uniformes comprimidos, malha por distância no visualizador, população 150–250 | T2.1a | medições | budget: ≥ 2× tempo real por mundo com 200 criaturas no Sim |

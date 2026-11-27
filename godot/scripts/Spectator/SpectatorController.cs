@@ -48,8 +48,16 @@ public partial class SpectatorController : Node3D
         _bridge = GetNode<BrainBridge>(BridgePath);
         _dayNight = GetNode<DayNightCycle>(DayNightPath);
         _season = GetNode<SeasonCycle>(SeasonPath);
+        // CREATURE_IA_CAMERA="x,y,z,pitchDegrees" places the free camera (overview screenshots).
+        var cameraSpec = System.Environment.GetEnvironmentVariable("CREATURE_IA_CAMERA")?.Split(',');
+        if (cameraSpec is { Length: 4 } && cameraSpec.All(v => float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _)))
+        {
+            var v = cameraSpec.Select(c => float.Parse(c, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            _camera.Position = new Vector3(v[0], v[1], v[2]);
+            _pitch = Mathf.DegToRad(v[3]);
+        }
         _camera.Rotation = new Vector3(_pitch, _yaw, 0f);
-        _camera.Far = 600f;
+        _camera.Far = 1600f;
 
         _telemetry.AddThemeStyleboxOverride("normal", new StyleBoxFlat
         {

@@ -70,7 +70,7 @@ public static class VoxelPhysics
         if (!onFloor && body.VelocityY <= 0f && BoxBlocked(grid, body.X, body.Y - 2f * Epsilon - 0.01f, body.Z, shape))
             onFloor = true;
         body.OnFloor = onFloor;
-        var inWater = grid.GetAtWorld(body.X, body.Y + shape.Height * 0.4f, body.Z) == BlockType.Water;
+        var inWater = BlockTypes.IsLiquid(grid.GetAtWorld(body.X, body.Y + shape.Height * 0.4f, body.Z));
         return new VoxelMoveResult(onFloor, hitWall, hitCeiling, inWater, landingSpeed, stepped);
     }
 

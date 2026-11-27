@@ -14,6 +14,9 @@ public sealed record VoxelWorldSettings
     public float TreeDensity { get; init; } = 1f;
     /// <summary>Showcase room: flat white floor, fixed mild climate, examples laid out side by side.</summary>
     public bool Showcase { get; init; }
+    /// <summary>Etapa 2 island (T2.1a): salt ocean all around (no wall), mountain range, rivers to the sea.</summary>
+    public bool Island { get; init; }
+    public int RiverCount { get; init; } = 6;
 
     public float WorldSizeX => SizeX * BlockSize;
     public float WorldSizeZ => SizeZ * BlockSize;
@@ -43,6 +46,8 @@ public sealed class VoxelWorld
     public VoxelWorldSettings Settings { get; }
     public int Seed { get; }
     public IReadOnlyList<LakeBasin> Lakes { get; }
+    /// <summary>Island rivers as block columns from source to mouth (4-connected). Empty on the etapa-1 map.</summary>
+    public IReadOnlyList<IReadOnlyList<(int X, int Z)>> Rivers { get; internal set; } = Array.Empty<IReadOnlyList<(int X, int Z)>>();
     public float WaterSurfaceY => Grid.OriginY + (Settings.WaterLevel + 1) * Grid.BlockSize;
 
     /// <summary>Name tags for the showcase room (text, world position). Empty in normal worlds.</summary>
@@ -91,6 +96,7 @@ public static class VoxelWorldGenerator
     public static VoxelWorld Generate(int seed, VoxelWorldSettings? settings = null)
     {
         settings ??= new VoxelWorldSettings();
+        if (settings.Island) return IslandGenerator.Generate(seed, settings);
         var grid = new VoxelGrid(settings.SizeX, settings.SizeY, settings.SizeZ, settings.BlockSize,
             -settings.WorldSizeX * 0.5f, 0f, -settings.WorldSizeZ * 0.5f);
         var lakes = PlaceLakes(seed, settings);
@@ -173,7 +179,7 @@ public static class VoxelWorldGenerator
         }
     }
 
-    private static BlockType SurfaceBlock(VoxelWorld world, int[] heights, int x, int z, int top, float wx, float wz)
+    internal static BlockType SurfaceBlock(VoxelWorld world, int[] heights, int x, int z, int top, float wx, float wz)
     {
         var s = world.Settings;
         if (top <= s.WaterLevel) return top >= s.WaterLevel - 2 ? BlockType.Sand : BlockType.Dirt;
@@ -192,7 +198,7 @@ public static class VoxelWorldGenerator
         return BlockType.Grass;
     }
 
-    private static void PlantTrees(VoxelWorld world, int[] heights, int seed)
+    internal static void PlantTrees(VoxelWorld world, int[] heights, int seed)
     {
         var grid = world.Grid;
         var s = world.Settings;
@@ -292,5 +298,5 @@ public static class VoxelWorldGenerator
         var altitude = MathF.Max(0f, (top - s.WaterLevel) * s.BlockSize);
         return (climate.TemperatureCelsius - altitude * VoxelWorld.AltitudeLapseCelsiusPerMeter, climate.Humidity, climate.VegetationDensity);
     }
-    private static float Next01(ref ulong state) => (PerlinNoise.SplitMix(ref state) >> 40) / (float)(1 << 24);
+    internal static float Next01(ref ulong state) => (PerlinNoise.SplitMix(ref state) >> 40) / (float)(1 << 24);
 }

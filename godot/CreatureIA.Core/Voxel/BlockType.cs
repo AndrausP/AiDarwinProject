@@ -23,12 +23,17 @@ public enum BlockType : byte
     FlowerRed = 17,
     AcaciaLeaves = 18,
     /// <summary>White floor/walls of the showcase room.</summary>
-    Marble = 19
+    Marble = 19,
+    /// <summary>Sea water (etapa 2 island): swimmable and visible like water, but never quenches thirst.</summary>
+    SaltWater = 20
 }
 
 public static class BlockTypes
 {
-    public const int Count = 20;
+    public const int Count = 21;
+
+    /// <summary>Fresh or salt water: not solid, buoyant, drawn as a transparent surface.</summary>
+    public static bool IsLiquid(BlockType block) => block is BlockType.Water or BlockType.SaltWater;
 
     /// <summary>Small plants drawn as crossed quads: no collision, invisible to vision rays.</summary>
     public static bool IsDecoration(BlockType block) =>
@@ -44,7 +49,7 @@ public static class BlockTypes
 
     /// <summary>Blocks that stop movement (water, air and decorations do not).</summary>
     public static bool IsSolid(BlockType block) =>
-        block is not (BlockType.Air or BlockType.Water) && !IsDecoration(block);
+        block is not (BlockType.Air or BlockType.Water or BlockType.SaltWater) && !IsDecoration(block);
 
     /// <summary>Blocks a vision ray stops at. Water is visible (the animal sees the lake surface).</summary>
     public static bool IsOpaqueToVision(BlockType block) => block != BlockType.Air && !IsDecoration(block);
@@ -74,6 +79,7 @@ public static class BlockTypes
         BlockType.FlowerRed => (0.86f, 0.18f, 0.20f),
         BlockType.AcaciaLeaves => (0.47f, 0.55f, 0.16f),
         BlockType.Marble => (0.95f, 0.95f, 0.96f),
+        BlockType.SaltWater => (0.12f, 0.33f, 0.62f),
         _ => (0f, 0f, 0f)
     };
 }

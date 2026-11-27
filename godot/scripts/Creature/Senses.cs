@@ -53,7 +53,7 @@ public static class VisionClass
         BlockType.Sand => Sand,
         BlockType.Stone or BlockType.Bedrock or BlockType.Marble => Stone,
         BlockType.Snow => Snow,
-        BlockType.Water => Water,
+        BlockType.Water or BlockType.SaltWater => Water,
         BlockType.Wood or BlockType.BirchWood or BlockType.RedWood => Wood,
         // Cactus reads as foliage: a green plant body (its own class would change the protocol).
         BlockType.Leaves or BlockType.PineLeaves or BlockType.BirchLeaves or BlockType.AcaciaLeaves or BlockType.Cactus => Leaves,

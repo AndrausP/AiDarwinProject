@@ -111,7 +111,7 @@ public static class GreedyMesher
                         for (var k = 0; k < width; k++)
                             mask[(j + h) * N + i + k] = 0;
 
-                        EmitQuad((BlockType)type == BlockType.Water ? water : solid, grid, corners,
+                        EmitQuad(BlockTypes.IsLiquid((BlockType)type) ? water : solid, grid, corners,
                             axis, u, v, sign, x0, y0, z0, slice, i, j, width, height, (BlockType)type);
                         i += width;
                     }
@@ -127,8 +127,8 @@ public static class GreedyMesher
     {
         if (block == BlockType.Air || BlockTypes.IsDecoration(block)) return false;
         var open = neighbour == BlockType.Air || BlockTypes.IsDecoration(neighbour);
-        if (block == BlockType.Water) return open;
-        return open || neighbour == BlockType.Water;
+        if (BlockTypes.IsLiquid(block)) return open;
+        return open || BlockTypes.IsLiquid(neighbour);
     }
 
     /// <summary>Tall grass and flowers: two crossed vertical quads, drawn from both sides.</summary>
