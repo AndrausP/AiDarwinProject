@@ -237,6 +237,8 @@ def _parse_args() -> argparse.Namespace:
                         help="PPO only: gru = brain v3 (memory + curiosity); mlp = brain v2 (resume old runs)")
     parser.add_argument("--curiosity", type=float, default=0.02,
                         help="PPO gru only: weight of the novelty (RND) bonus; 0 disables curiosity")
+    parser.add_argument("--lr", type=float, default=3e-4,
+                        help="PPO only: Adam learning rate for new runs (a resumed checkpoint keeps its optimizer state)")
     return parser.parse_args()
 
 
@@ -257,6 +259,7 @@ def main() -> None:
     try:
         if args.policy == "ppo":
             from creature_brain.learning.online import OnlinePPOConfig, OnlinePPOPolicy
+            from creature_brain.learning.ppo import PPOConfig
             from creature_brain.learning.recurrent import CuriosityConfig
 
             policy = OnlinePPOPolicy(
@@ -267,11 +270,12 @@ def main() -> None:
                     metrics_path=args.metrics,
                     brain=args.brain,
                     curiosity=CuriosityConfig(weight=args.curiosity),
-                )
+                ),
+                ppo_config=PPOConfig(learning_rate=args.lr),
             )
             logging.getLogger(__name__).info(
-                "brain=%s parameters=%d curiosity=%.3f",
-                args.brain, policy.model.trainable_parameter_count, args.curiosity,
+                "brain=%s parameters=%d curiosity=%.3f lr=%.2e",
+                args.brain, policy.model.trainable_parameter_count, args.curiosity, args.lr,
             )
         else:
             policy = RandomPolicy(args.seed)

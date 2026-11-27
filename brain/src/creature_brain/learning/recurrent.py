@@ -42,7 +42,9 @@ class RecurrentActorCritic(nn.Module):
             nn.Linear(encoder_size, encoder_size),
             nn.SiLU(),
         )
-        self.memory = nn.GRUCell(encoder_size, hidden_size)
+        # nn.GRU (not GRUCell) so training replays whole segments in one fused cuDNN call (T2.0e);
+        # same maths and parameters as the GRUCell of the first v3 runs (old checkpoints are remapped).
+        self.memory = nn.GRU(encoder_size, hidden_size)
         # Skip connection: reactive behaviour (see water → drink) does not have to pass through memory.
         self.head = nn.Sequential(nn.Linear(hidden_size + encoder_size, head_size), nn.SiLU())
         self.actor_mean = nn.Linear(head_size, action_dim)
@@ -68,22 +70,36 @@ class RecurrentActorCritic(nn.Module):
         if observations.shape[-1] != self.observation_dim:
             raise ValueError(f"expected observation dim {self.observation_dim}, got {observations.shape[-1]}")
         encoded = self.encoder(observations)
-        new_hidden = self.memory(encoded, hidden)
+        _, new_hidden = self.memory(encoded.unsqueeze(0), hidden.unsqueeze(0).contiguous())
+        new_hidden = new_hidden.squeeze(0)
         mean, log_std, value = self._outputs(encoded, new_hidden)
         return mean, log_std, value, new_hidden
 
     def sequence(self, observations: Tensor, initial_hidden: Tensor, starts: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-        """Replays T steps; memory is zeroed where ``starts`` marks a new life (or an empty slot)."""
+        """Replays T steps; memory is zeroed where ``starts`` marks a new life (or an empty slot).
+
+        Runs one fused GRU call per segment between ticks where any slot restarts (deaths are
+        rare, so a 64-step rollout is usually one or two segments) instead of T GRUCell steps."""
         steps, agents, _ = observations.shape
         encoded = self.encoder(observations.reshape(steps * agents, -1)).reshape(steps, agents, -1)
-        hidden = initial_hidden
+        restarts = (starts[1:].any(dim=1).nonzero().flatten() + 1).tolist()  # one device sync
+        cuts = [0] + restarts + [steps]
+        hidden = initial_hidden.unsqueeze(0)
         outputs = []
-        for t in range(steps):
-            hidden = hidden * (~starts[t]).unsqueeze(-1).to(hidden.dtype)
-            hidden = self.memory(encoded[t], hidden)
-            outputs.append(hidden)
-        memory = torch.stack(outputs)
+        for begin, end in zip(cuts[:-1], cuts[1:]):
+            hidden = hidden * (~starts[begin]).unsqueeze(-1).to(hidden.dtype)
+            segment, hidden = self.memory(encoded[begin:end], hidden.contiguous())
+            outputs.append(segment)
+        memory = torch.cat(outputs)
         return self._outputs(encoded, memory)
+
+    def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
+        # First v3 runs (v3-gru-a) stored a GRUCell: memory.weight_ih -> memory.weight_ih_l0, etc.
+        for name in ("weight_ih", "weight_hh", "bias_ih", "bias_hh"):
+            old = f"{prefix}memory.{name}"
+            if old in state_dict:
+                state_dict[f"{old}_l0"] = state_dict.pop(old)
+        super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
 
     @torch.no_grad()
     def act_step(

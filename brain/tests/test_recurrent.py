@@ -39,6 +39,46 @@ def test_should_replay_same_outputs_when_sequence_matches_stepwise_acting() -> N
         assert torch.allclose(value, value_seq[t], atol=1e-5)
 
 
+def test_should_match_grucell_reference_when_fused_sequence_has_several_restarts() -> None:
+    torch.manual_seed(1)
+    model = RecurrentActorCritic()
+    cell = torch.nn.GRUCell(768, 512)
+    cell.load_state_dict({name: getattr(model.memory, f"{name}_l0") for name in ("weight_ih", "weight_hh", "bias_ih", "bias_hh")})
+    observations = torch.randn(12, 4, OBSERVATION_DIM)
+    starts = torch.zeros(12, 4, dtype=torch.bool)
+    starts[0, 2] = True
+    starts[4, 0] = True
+    starts[9, 1] = True
+    starts[9, 3] = True
+    initial = torch.randn(4, 512)
+    with torch.no_grad():
+        encoded = model.encoder(observations)
+        hidden, reference = initial, []
+        for t in range(12):
+            hidden = cell(encoded[t], hidden * (~starts[t]).unsqueeze(-1).float())
+            reference.append(hidden)
+        expected_mean, _, expected_value = model._outputs(encoded, torch.stack(reference))
+        mean, _, value = model.sequence(observations, initial, starts)
+
+    assert torch.allclose(mean, expected_mean, atol=1e-5)
+    assert torch.allclose(value, expected_value, atol=1e-5)
+
+
+def test_should_load_grucell_checkpoint_when_brain_v3_switched_to_fused_gru() -> None:
+    torch.manual_seed(2)
+    model = RecurrentActorCritic()
+    legacy = {
+        (key.replace("_l0", "") if key.startswith("memory.") else key): value.clone()
+        for key, value in model.state_dict().items()
+    }
+    assert "memory.weight_ih" in legacy
+    fresh = RecurrentActorCritic()
+
+    fresh.load_state_dict(legacy)
+
+    assert torch.equal(fresh.memory.weight_hh_l0, model.memory.weight_hh_l0)
+
+
 def test_should_remember_past_observation_when_memory_is_carried() -> None:
     torch.manual_seed(0)
     model = RecurrentActorCritic()
