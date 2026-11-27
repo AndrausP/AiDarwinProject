@@ -13,7 +13,8 @@ param(
     [int]$Lakes = 6,
     [int]$BasePort = 5600,
     [switch]$Deterministic,
-    [switch]$NoBuild                # use the newest existing Sim build (e.g. while a training run locks bin\Release)
+    [switch]$NoBuild,               # use the newest existing Sim build (e.g. while a training run locks bin\Release)
+    [switch]$Sequential             # one policy at a time (each brain server holds ~1.3 GB of RAM)
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath "$PSScriptRoot\..").Path
@@ -72,6 +73,7 @@ foreach ($e in $entries) {
         -RedirectStandardError (Join-Path $outDir "$label-sim.log") -RedirectStandardOutput (Join-Path $outDir "$label-sim.out")
     $processes += $server
     Write-Host "evaluating $label ($policy) on seed $Seed x $Replicas replicas (port $port)"
+    if ($Sequential) { $processes | ForEach-Object { $_.WaitForExit() } }
     $port++
 }
 $processes | ForEach-Object { $_.WaitForExit() }
