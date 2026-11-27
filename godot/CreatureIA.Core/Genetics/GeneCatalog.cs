@@ -76,5 +76,11 @@ public sealed class GeneCatalog
         new GeneDefinition("teeth", 0f, 1f, 0.2f, Chromosome: 6, Position: 0.4f),
         // Sexual dimorphism: males are (1 + bias) times the female size.
         new GeneDefinition("male_size_bias", -0.3f, 0.5f, 0f, Chromosome: 7, Position: 0f),
+        // Sense acuity (T2.2d): defaults reproduce the etapa-1 senses exactly (1 = etapa-1 value).
+        new GeneDefinition("vision_range", 0.4f, 2f, 1f, Chromosome: 8, Position: 0f),
+        new GeneDefinition("vision_fov", 0.5f, 1.6f, 1f, Chromosome: 8, Position: 0.3f),
+        new GeneDefinition("night_vision", 0f, 1f, 0f, Chromosome: 8, Position: 0.6f),
+        new GeneDefinition("smell", 0.3f, 3f, 1f, Chromosome: 9, Position: 0f),
+        new GeneDefinition("hearing", 0.3f, 3f, 1f, Chromosome: 9, Position: 0.4f),
     });
 }
