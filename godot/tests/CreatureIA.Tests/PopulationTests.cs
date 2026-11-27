@@ -75,6 +75,35 @@ public sealed class PopulationTests
     }
 
     [Test]
+    public void Should_SaveEnergy_When_TorpidCreatureSleepsInTheCold()
+    {
+        var world = EmptyWorld(births: false);
+        // The coldest corner of the map (north, highest): torpor only works below 12 °C.
+        var spot = Enumerable.Range(0, 200).Select(i => world.Terrain.RandomLandPoint(new SimRandom((ulong)i), 180f))
+            .OrderBy(p => world.AmbientTemperature(p)).First() + Vector3.UnitY * 0.05f;
+        Assume.That(world.AmbientTemperature(spot), Is.LessThan(12f));
+        Genome WithTorpor(float value)
+        {
+            var g = Species.Founder(FounderSpecies.B, Sex.Female, new SimRandom(4));
+            var i = g.Catalog.IndexOf("torpor");
+            g.Maternal[i] = new Allele(value, 0.5f);
+            g.Paternal[i] = new Allele(value, 0.5f);
+            return g;
+        }
+        var plain = world.AddForTest(new SimCreature(1, spot, WithTorpor(0f), FounderSpecies.B), LifeCycle.SecondsPerYear * 2, energy: 0.9);
+        var torpid = world.AddForTest(new SimCreature(2, spot + new Vector3(3f, 0f, 0f), WithTorpor(1f), FounderSpecies.B), LifeCycle.SecondsPerYear * 2, energy: 0.9);
+        var sleep = Action((7, 1f));
+        for (var tick = 0; tick < 300; tick++)
+        {
+            plain.SetAction(sleep);
+            torpid.SetAction(sleep);
+            world.StepBrainTick();
+        }
+
+        Assert.That(torpid.Physiology.Energy, Is.GreaterThan(plain.Physiology.Energy));
+    }
+
+    [Test]
     public void Should_NotConceive_When_OnlyOneWantsToMate()
     {
         var world = EmptyWorld();

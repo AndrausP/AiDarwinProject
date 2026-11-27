@@ -4,7 +4,7 @@ using CreatureIA.Core.Voxel;
 namespace CreatureIA.Core.Simulation;
 
 /// <summary>
-/// Observation v3 (Task 002 etapa 2, T2.3): 1129 floats. See contracts/protocol-v3.json and
+/// Observation v3 (Task 002 etapa 2, T2.3): 1130 floats. See contracts/protocol-v3.json and
 /// docs/tasks/008-proposta-protocolo-v3.md. Shared by the Sim and the Godot runtime.
 /// </summary>
 public static class ObservationLayout
@@ -35,12 +35,12 @@ public static class ObservationLayout
     public const int TimeOffset = InteroceptionOffset + InteroceptionLength; // 1091
     public const int TimeLength = 6;
     /// <summary>Expressed body/life genes of <see cref="GeneCatalog.Basic"/> (all but the "m_" motivations), catalog order, each 0..1 by its range.</summary>
-    public const int GenesOffset = TimeOffset + TimeLength; // 1097
-    public const int GenesLength = 23;
+    public const int GenesOffset = TimeOffset + TimeLength; // 1097 (24 genes -> motivations at 1121, total 1130)
+    public const int GenesLength = 24;
     /// <summary>The individual's reward weights (motivation genes, <see cref="GeneCatalog.MotivationOrder"/>), raw values.</summary>
-    public const int MotivationsOffset = GenesOffset + GenesLength; // 1120
+    public const int MotivationsOffset = GenesOffset + GenesLength; // 1121
     public const int MotivationsLength = 9;
-    public const int Total = MotivationsOffset + MotivationsLength; // 1129
+    public const int Total = MotivationsOffset + MotivationsLength; // 1130
     public const int ActionCount = 13;
 
 

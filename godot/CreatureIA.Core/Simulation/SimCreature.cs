@@ -347,6 +347,15 @@ public sealed class SimCreature
         _waterIntake = 0;
         _pendingDamage.Clear();
         var state = result.State;
+        // Torpor (T2.2c): asleep in the cold, part of the basal metabolism is saved; any trace of the gene costs upkeep.
+        var torpor = Genome.Phenotype("torpor");
+        if (torpor > 0f && state.IsAlive)
+        {
+            var basal = _traits.BasalMetabolicRate * Math.Pow(_traits.Mass, BodyPlan.KleiberExponent) * dt;
+            var saved = state.IsSleeping && ambient < 12.0 ? 0.6 * torpor * basal : 0.0;
+            var upkeep = 0.1 * torpor * basal;
+            state = state with { Energy = Math.Clamp(state.Energy + saved - upkeep, 0.0, 1.0) };
+        }
         var died = result.DiedThisStep;
         if (state.IsAlive)
         {

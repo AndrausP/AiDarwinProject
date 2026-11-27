@@ -94,6 +94,8 @@ public sealed class GeneCatalog
         new GeneDefinition("gestation_days", 0.1f, 4f, 0.5f, Chromosome: 11, Position: 0.3f),
         new GeneDefinition("breeding_peak", 0f, 1f, 0.4f, Chromosome: 11, Position: 0.6f),
         new GeneDefinition("breeding_width", 0.1f, 1f, 1f, Chromosome: 11, Position: 0.8f),
+        // Torpor (T2.2c): asleep in the cold the metabolism drops by up to 60 %; dormant at 0, upkeep when present.
+        new GeneDefinition("torpor", 0f, 1f, 0f, Chromosome: 10, Position: 0.5f),
         // Body parts (T2.2b). Dormant parts start at 0 and only work above BodyPlan.FunctionalThreshold.
         new GeneDefinition("claws", 0f, 1f, 0f, Chromosome: 5, Position: 0f),
         new GeneDefinition("carapace", 0f, 1f, 0f, Chromosome: 5, Position: 0.3f),

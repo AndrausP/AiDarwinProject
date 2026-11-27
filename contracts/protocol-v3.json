@@ -9,7 +9,7 @@
     "bodyLengthIncludes": ["message_type", "payload"],
     "maxBodyLength": 67108864
   },
-  "dimensions": { "observation": 1129, "action": 13 },
+  "dimensions": { "observation": 1130, "action": 13 },
   "observation": {
     "vision": { "offset": 0, "length": 1008, "layout": "72 rays (3 pitch rows x 24 yaw) x 14: distance/range, one-hot [none, soil, sand, stone, snow, water, wood, leaves, plant, thorny, meat, creature, salt_water]" },
     "creatureSectors": { "offset": 1008, "length": 36, "layout": "4 yaw sectors of the eye row x (r, g, b, relative size clamp 0..4, carnivore, kin (parent, young or sibling), female, mature, juvenile), averaged over hits" },
@@ -18,8 +18,8 @@
     "proprioception": { "offset": 1067, "length": 10, "layout": "local velocity xyz /10, turn, on floor, head pitch, sleeping, in water, climbing, blocked" },
     "interoception": { "offset": 1077, "length": 14, "layout": "energy, water, body temperature, head, torso, legs, fatigue, pain, libido, age fraction, mature, fear (same 12 as v2, read by the reward; age fraction = age / longevity gene), gestation, offspring nearby in need" },
     "time": { "offset": 1091, "length": 6, "layout": "sin, cos of time of day; photoperiod 0..1 (long summer days = 1); photoperiod trend (sin of year, > 0 lengthening); light now 0..1; climate temperature offset / 20 C" },
-    "genes": { "offset": 1097, "length": 23, "layout": "expressed body/life genes of GeneCatalog.Basic (every locus not prefixed m_), catalog order, each (value - min) / (max - min)" },
-    "motivations": { "offset": 1120, "length": 9, "layout": "individual reward weights = motivation genes, raw values: energy, water, temperature, integrity, fatigue, libido, pain, fear, care" }
+    "genes": { "offset": 1097, "length": 24, "layout": "expressed body/life genes of GeneCatalog.Basic (every locus not prefixed m_), catalog order, each (value - min) / (max - min)" },
+    "motivations": { "offset": 1121, "length": 9, "layout": "individual reward weights = motivation genes, raw values: energy, water, temperature, integrity, fatigue, libido, pain, fear, care" }
   },
   "actions": ["thrust", "turn", "gait", "head_pitch", "jump", "eat", "drink", "sleep", "mate", "sound", "dig", "climb", "feed"],
   "messageTypes": { "HELLO": 1, "CONFIG": 2, "STEP": 3, "ACT": 4, "SPAWN": 5 },
@@ -42,7 +42,7 @@
   "messages": {
     "HELLO": ["u16 version", "u16 observation_dim", "u16 action_dim", "u64 world_seed"],
     "CONFIG": ["f32 time_scale", "u16 physics_hz", "u16 brain_hz", "u16 population"],
-    "STEP": ["u64 tick", "u16 agent_count", "agent_count * (u32 id + 1129*f32 observation)", "u16 event_count", "event_count * (u8 type + u16 length + bytes payload)"],
+    "STEP": ["u64 tick", "u16 agent_count", "agent_count * (u32 id + 1130*f32 observation)", "u16 event_count", "event_count * (u8 type + u16 length + bytes payload)"],
     "ACT": ["u64 tick", "u16 agent_count", "agent_count * (u32 id + 13*f32 action)"],
     "SPAWN": ["u32 id", "u16 trait_count", "trait_count*f32 traits", "u8 has_position", "if has_position: 3*f32 position"]
   },
