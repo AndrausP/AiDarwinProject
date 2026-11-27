@@ -20,6 +20,22 @@ public sealed class SimRandom
         NextUInt();
     }
 
+    /// <summary>Generator position, for world snapshots (T2.0c).</summary>
+    internal (ulong State, ulong Increment) Save() => (_state, _increment);
+
+    internal SimRandom((ulong State, ulong Increment) saved)
+    {
+        _state = saved.State;
+        _increment = saved.Increment;
+    }
+
+    /// <summary>Continues from another generator's position (used when restoring a snapshot into an existing owner).</summary>
+    internal void Restore(SimRandom other)
+    {
+        _state = other._state;
+        if (_increment != other._increment) throw new InvalidDataException("generator stream mismatch");
+    }
+
     public uint NextUInt()
     {
         var old = _state;

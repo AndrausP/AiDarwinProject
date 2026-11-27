@@ -45,6 +45,25 @@ public sealed class MultiWorld
             foreach (var creature in _worlds[w].Creatures) _worldOf[creature.Id] = w;
     }
 
+    /// <summary>Resumes worlds saved by <see cref="SaveAll"/> (world-0.bin, world-1.bin, …).</summary>
+    public MultiWorld(string directory, int worldCount)
+    {
+        _worlds = new SimWorld[worldCount];
+        _eventsPerWorld = new SimEvent[worldCount][];
+        Parallel.For(0, worldCount, w => _worlds[w] = SimWorld.LoadFile(Path.Combine(directory, $"world-{w}.bin")));
+        for (var w = 0; w < worldCount; w++)
+            foreach (var creature in _worlds[w].Creatures) _worldOf[creature.Id] = w;
+    }
+
+    public static bool HasSnapshots(string directory, int worldCount) =>
+        Enumerable.Range(0, worldCount).All(w => File.Exists(Path.Combine(directory, $"world-{w}.bin")));
+
+    public void SaveAll(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        Parallel.For(0, _worlds.Length, w => _worlds[w].SaveFile(Path.Combine(directory, $"world-{w}.bin")));
+    }
+
     /// <summary>6 physics ticks in every world, worlds in parallel.</summary>
     public void StepBrainTick() => Parallel.For(0, _worlds.Length, w => _worlds[w].StepBrainTick());
 

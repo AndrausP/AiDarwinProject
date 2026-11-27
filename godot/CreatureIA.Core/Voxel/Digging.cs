@@ -55,4 +55,14 @@ public sealed class DigProgress
         _seconds = 0f;
         Fraction = 0f;
     }
+
+    /// <summary>State for world snapshots: (target block, seconds of effort, fraction).</summary>
+    public ((int X, int Y, int Z)? Target, float Seconds, float Fraction) Save() => (_target, _seconds, Fraction);
+
+    public void Restore((int X, int Y, int Z)? target, float seconds, float fraction)
+    {
+        _target = target;
+        _seconds = seconds;
+        Fraction = fraction;
+    }
 }

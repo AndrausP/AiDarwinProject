@@ -21,8 +21,10 @@ var settings = new SimWorldSettings
     Lakes = options.Lakes,
 };
 var clock = Stopwatch.StartNew();
-var worlds = new MultiWorld(settings, options.Worlds, options.Replicas);
-var seeds = options.Replicas ? $"terrain seed {options.Seed}, salts 0..{options.Worlds - 1}" : $"seeds {options.Seed}..{options.Seed + options.Worlds - 1}";
+var resumed = options.WorldsDir is not null && MultiWorld.HasSnapshots(options.WorldsDir, options.Worlds);
+var worlds = resumed ? new MultiWorld(options.WorldsDir!, options.Worlds) : new MultiWorld(settings, options.Worlds, options.Replicas);
+var seeds = resumed ? $"resumed from {options.WorldsDir}"
+    : options.Replicas ? $"terrain seed {options.Seed}, salts 0..{options.Worlds - 1}" : $"seeds {options.Seed}..{options.Seed + options.Worlds - 1}";
 Console.Error.WriteLine($"[sim] {options.Worlds} world(s) x {options.Population} creatures generated in {clock.ElapsedMilliseconds} ms " +
                         $"({seeds}, plants={options.Plants}, lakes={options.Lakes})");
 
@@ -87,6 +89,8 @@ for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
     simMs += (t1 - t0) * 1000.0 / Stopwatch.Frequency;
     observeMs += (t2 - t1) * 1000.0 / Stopwatch.Frequency;
     waitMs += (t3 - t2) * 1000.0 / Stopwatch.Frequency;
+    if (options.WorldsDir is not null && options.SaveEvery > 0 && (brainTick + 1) % (ulong)options.SaveEvery == 0)
+        worlds.SaveAll(options.WorldsDir);
     if ((brainTick + 1) % (ulong)options.ReportEvery == 0)
     {
         var n = options.ReportEvery;
@@ -98,6 +102,7 @@ for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
     }
 }
 var reason = options.Ticks > 0 && brainTick >= (ulong)options.Ticks ? "horizon" : "extinct";
+if (options.WorldsDir is not null) worlds.SaveAll(options.WorldsDir);
 Console.Error.WriteLine($"[run] stopping at brain tick {brainTick}: {reason}");
 var exploits = worlds.Exploits();
 var report = string.Create(CultureInfo.InvariantCulture,
@@ -141,6 +146,9 @@ internal sealed record Options
     public bool Replicas { get; init; }
     public int ReportEvery { get; init; } = 600;
     public string? ReportFile { get; init; }
+    /// <summary>World snapshots (T2.0c): resume from here when present; saved at exit and every SaveEvery ticks.</summary>
+    public string? WorldsDir { get; init; }
+    public int SaveEvery { get; init; } = 6000;
 
     public static Options Parse(string[] args)
     {
@@ -163,6 +171,8 @@ internal sealed record Options
                 "--bench" => o with { Bench = true },
                 "--replicas" => o with { Replicas = true },
                 "--report-file" => o with { ReportFile = Next() },
+                "--worlds-dir" => o with { WorldsDir = Next() },
+                "--save-every" => o with { SaveEvery = NextInt() },
                 "--report-every" => o with { ReportEvery = NextInt() },
                 _ => throw new ArgumentException($"unknown option {args[i]}")
             };

@@ -66,7 +66,9 @@ while (-not (Select-String -Path (Join-Path $runDir "server.log") -Pattern "list
 }
 
 $simArgs = @("--port", $Port, "--worlds", $Worlds, "--seed", $Seed, "--population", $Population,
-    "--plants", $Plants, "--lakes", $Lakes, "--ticks", $Ticks, "--report-file", (Join-Path $runDir "sim-report.json"))
+    "--plants", $Plants, "--lakes", $Lakes, "--ticks", $Ticks, "--report-file", (Join-Path $runDir "sim-report.json"),
+    # World snapshots (T2.0c): re-running the same RunName continues the same worlds, not fresh ones.
+    "--worlds-dir", (Join-Path $runDir "worlds"))
 if ($NoRespawn) { $simArgs += "--quit-when-extinct" }
 Write-Host "training $Policy ($Brain) on CreatureIA.Sim: $Worlds world(s) x $Population for $Ticks ticks -> $runDir"
 $simProcess = Start-Process -FilePath $sim -ArgumentList $simArgs -NoNewWindow -PassThru `

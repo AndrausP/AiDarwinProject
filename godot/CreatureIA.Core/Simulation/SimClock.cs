@@ -25,6 +25,20 @@ public sealed class SimClock
         YearProgress01 = PositiveMod(YearProgress01 + dt / YearDurationSeconds);
     }
 
+    internal void Save(BinaryWriter w)
+    {
+        w.Write(TimeOfDay01);
+        w.Write(YearProgress01);
+        w.Write(ElapsedSeconds);
+    }
+
+    internal void Restore(BinaryReader r)
+    {
+        TimeOfDay01 = r.ReadSingle();
+        YearProgress01 = r.ReadSingle();
+        ElapsedSeconds = r.ReadDouble();
+    }
+
     internal static float Lerp(float from, float to, float weight) => from + (to - from) * weight;
 
     private static float PositiveMod(float value)

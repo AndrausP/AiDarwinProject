@@ -209,6 +209,71 @@ public sealed class SimulationTests
         Assert.That(world.Exploits.AtBorder, Is.EqualTo(0));
     }
 
+    /// <summary>Deterministic per-tick actions from a seeded generator (biased so creatures dig and call often).</summary>
+    private static void Drive(SimWorld world, SimRandom rng)
+    {
+        foreach (var creature in world.Creatures)
+        {
+            var action = RandomAction(rng);
+            action[10] = rng.NextFloat() < 0.5f ? 1f : action[10]; // dig
+            action[3] = -1f;                                       // look down: digging edits the floor
+            creature.SetAction(action);
+        }
+    }
+
+    [Test]
+    public void Should_ContinueIdentically_When_WorldIsSnapshottedAndRestored()
+    {
+        var world = NewWorld(seed: 4, population: 12);
+        var rng = new SimRandom(21);
+        var observation = new float[ObservationLayout.Total];
+        for (var tick = 0; tick < 150; tick++)
+        {
+            world.StepBrainTick();
+            foreach (var creature in world.Creatures) world.Observe(creature, observation);
+            Drive(world, rng);
+        }
+        using var snapshot = new MemoryStream();
+        world.Save(snapshot);
+        var restored = SimWorld.Load(new MemoryStream(snapshot.ToArray()));
+        Assert.That(restored.StateHash(), Is.EqualTo(world.StateHash()), "restore must reproduce the saved state");
+
+        var rngA = new SimRandom(99);
+        var rngB = new SimRandom(99);
+        for (var tick = 0; tick < 150; tick++)
+        {
+            foreach (var (w, r) in new[] { (world, rngA), (restored, rngB) })
+            {
+                w.StepBrainTick();
+                foreach (var creature in w.Creatures) w.Observe(creature, observation);
+                Drive(w, r);
+            }
+        }
+
+        Assert.That(restored.StateHash(), Is.EqualTo(world.StateHash()), "continuation after restore must match");
+        Assert.That(world.PhysicsTick, Is.EqualTo(1800));
+    }
+
+    [Test]
+    public void Should_KeepDugBlocks_When_SnapshotIsReloaded()
+    {
+        var world = NewWorld(population: 0);
+        var spot = world.Terrain.RandomLandPoint(new SimRandom(5), 60f);
+        var grid = world.Terrain.Grid;
+        var (bx, by, bz) = grid.WorldToBlock(spot.X, spot.Y - 0.25f, spot.Z);
+        grid.Set(bx, by, bz, CreatureIA.Core.Voxel.BlockType.Air);
+        var path = Path.Combine(Path.GetTempPath(), $"ciaw-{Guid.NewGuid():N}.bin");
+        try
+        {
+            world.SaveFile(path);
+            var restored = SimWorld.LoadFile(path);
+
+            Assert.That(restored.Terrain.Grid.Get(bx, by, bz), Is.EqualTo(CreatureIA.Core.Voxel.BlockType.Air));
+            Assert.That(File.Exists(path + ".tmp"), Is.False);
+        }
+        finally { File.Delete(path); }
+    }
+
     [Test]
     public void Should_GiveSameSequence_When_SimRandomSeedsMatch()
     {

@@ -146,8 +146,44 @@ public sealed class PlantField
         var cell = CellIndex(position.Z) * _cellsPerSide + CellIndex(position.X);
         if (_cellOf[index] == cell) return;
         if (_cellOf[index] >= 0) _cells[_cellOf[index]].Remove(index);
-        _cells[cell].Add(index);
+        // Sorted by plant index: iteration (and float sums) never depends on relocation history,
+        // so a restored snapshot continues exactly like the original.
+        var list = _cells[cell];
+        var at = list.BinarySearch(index);
+        list.Insert(at < 0 ? ~at : at, index);
         _cellOf[index] = cell;
+    }
+
+    internal void Save(BinaryWriter writer)
+    {
+        var (state, increment) = _rng.Save();
+        writer.Write(state);
+        writer.Write(increment);
+        writer.Write(_plants.Length);
+        foreach (var p in _plants)
+        {
+            writer.Write(p.Position.X); writer.Write(p.Position.Y); writer.Write(p.Position.Z);
+            writer.Write(p.Biomass); writer.Write(p.GrowthRate); writer.Write(p.Thorny); writer.Write(p.DepletedSeconds);
+        }
+    }
+
+    internal void Restore(BinaryReader reader)
+    {
+        _rng.Restore(new SimRandom((reader.ReadUInt64(), reader.ReadUInt64())));
+        var count = reader.ReadInt32();
+        if (count != _plants.Length) throw new InvalidDataException($"snapshot has {count} plants, world has {_plants.Length}");
+        foreach (var list in _cells) list.Clear();
+        Array.Fill(_cellOf, -1);
+        for (var i = 0; i < count; i++)
+        {
+            var p = _plants[i];
+            p.Position = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            p.Biomass = reader.ReadSingle();
+            p.GrowthRate = reader.ReadSingle();
+            p.Thorny = reader.ReadBoolean();
+            p.DepletedSeconds = reader.ReadSingle();
+            PlaceInCell(i);
+        }
     }
 
     private Vector3 FertileSpot() =>

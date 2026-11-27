@@ -76,7 +76,10 @@ public sealed class SimWorld
     private readonly List<SimCreature> _creatures = new();
     private readonly HashSet<uint> _usedIds = new();
     private readonly SimRandom _spawnRng;
-    private readonly Dictionary<uint, SoundPulse> _sounds = new();
+    // Sorted: summation order of overlapping calls must not depend on history (snapshot determinism).
+    private readonly SortedDictionary<uint, SoundPulse> _sounds = new();
+    /// <summary>Blocks changed since generation (digging), final type per position; replayed on snapshot load.</summary>
+    private readonly SortedDictionary<(int X, int Y, int Z), BlockType> _edits = new();
     private readonly List<uint> _expired = new();
     private readonly List<SimEvent> _events = new();
     private readonly List<(Vector3 Base, bool Thorny)> _nearPlants = new();
@@ -86,9 +89,103 @@ public sealed class SimWorld
     {
         Settings = settings;
         Terrain = new SimTerrain(VoxelWorldGenerator.Generate(settings.Seed, new VoxelWorldSettings { LakeCount = settings.Lakes }));
+        Terrain.Grid.BlockChanged += (x, y, z) => _edits[(x, y, z)] = Terrain.Grid.Get(x, y, z);
         Plants = new PlantField(Terrain, settings.Seed + settings.Salt * 1_000_003, settings.Plants);
         _spawnRng = new SimRandom((ulong)(settings.Seed + settings.Salt * 1_000_003), stream: 7);
         foreach (var id in initialIds ?? Enumerable.Range(1, settings.Population).Select(i => (uint)i)) Spawn(id, null);
+    }
+
+    private const uint SnapshotMagic = 0x57414943; // "CIAW"
+    private const int SnapshotVersion = 1;
+
+    /// <summary>
+    /// Complete world state (T2.0c): settings, edited blocks, clock, plants, creatures, sounds, pending
+    /// events, ids and every generator position. Terrain is regenerated from the seed on load.
+    /// </summary>
+    public void Save(Stream stream)
+    {
+        using var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        w.Write(SnapshotMagic); w.Write(SnapshotVersion);
+        var s = Settings;
+        w.Write(s.Seed); w.Write(s.Population); w.Write(s.Plants); w.Write(s.Lakes); w.Write(s.SpawnExtentMeters); w.Write(s.Salt);
+        w.Write(PhysicsTick);
+        Clock.Save(w);
+        w.Write(_edits.Count);
+        foreach (var ((x, y, z), block) in _edits) { w.Write(x); w.Write(y); w.Write(z); w.Write((byte)block); }
+        Plants.Save(w);
+        var (state, increment) = _spawnRng.Save();
+        w.Write(state); w.Write(increment);
+        w.Write(_usedIds.Count);
+        foreach (var id in _usedIds.OrderBy(i => i)) w.Write(id);
+        w.Write(_creatures.Count);
+        foreach (var creature in _creatures) creature.Save(w);
+        w.Write(_sounds.Count);
+        foreach (var sound in _sounds.Values)
+        {
+            w.Write(sound.SourceId); w.Write(sound.Position.X); w.Write(sound.Position.Y); w.Write(sound.Position.Z);
+            w.Write(sound.Intensity); w.Write(sound.Tone); w.Write(sound.CreatedTick);
+        }
+        w.Write(_events.Count);
+        foreach (var e in _events) { w.Write((byte)e.Kind); w.Write(e.CreatureId); w.Write(e.Code); w.Write(e.Quantity); w.Write(e.SourceId); }
+        w.Write(Exploits.CreatureTicks); w.Write(Exploits.OnLeaves); w.Write(Exploits.Buried); w.Write(Exploits.AtBorder);
+    }
+
+    public static SimWorld Load(Stream stream)
+    {
+        using var r = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        if (r.ReadUInt32() != SnapshotMagic) throw new InvalidDataException("not a world snapshot");
+        if (r.ReadInt32() != SnapshotVersion) throw new InvalidDataException("unsupported world snapshot version");
+        var settings = new SimWorldSettings
+        {
+            Seed = r.ReadInt32(), Population = r.ReadInt32(), Plants = r.ReadInt32(), Lakes = r.ReadInt32(),
+            SpawnExtentMeters = r.ReadSingle(), Salt = r.ReadInt32()
+        };
+        var world = new SimWorld(settings, Array.Empty<uint>()) { PhysicsTick = r.ReadInt64() };
+        world.Clock.Restore(r);
+        var edits = r.ReadInt32();
+        for (var i = 0; i < edits; i++) world.Terrain.Grid.Set(r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), (BlockType)r.ReadByte());
+        world.Terrain.Grid.TakeDirtyChunks();
+        world.Plants.Restore(r);
+        world._spawnRng.Restore(new SimRandom((r.ReadUInt64(), r.ReadUInt64())));
+        var used = r.ReadInt32();
+        for (var i = 0; i < used; i++) world._usedIds.Add(r.ReadUInt32());
+        var creatures = r.ReadInt32();
+        for (var i = 0; i < creatures; i++) world._creatures.Add(SimCreature.Load(r));
+        var sounds = r.ReadInt32();
+        for (var i = 0; i < sounds; i++)
+        {
+            var pulse = new SoundPulse(r.ReadUInt32(), new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()),
+                r.ReadSingle(), r.ReadSingle(), r.ReadInt64());
+            world._sounds[pulse.SourceId] = pulse;
+        }
+        var events = r.ReadInt32();
+        for (var i = 0; i < events; i++)
+            world._events.Add(new SimEvent((SimEventKind)r.ReadByte(), r.ReadUInt32(), r.ReadByte(), r.ReadSingle(), r.ReadUInt32()));
+        world.Exploits.CreatureTicks = r.ReadInt64(); world.Exploits.OnLeaves = r.ReadInt64();
+        world.Exploits.Buried = r.ReadInt64(); world.Exploits.AtBorder = r.ReadInt64();
+        return world;
+    }
+
+    /// <summary>SHA-256 of the snapshot bytes: equal hashes = identical world state.</summary>
+    public string StateHash()
+    {
+        using var buffer = new MemoryStream();
+        Save(buffer);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(buffer.ToArray()));
+    }
+
+    /// <summary>Atomic file write: a killed process never leaves a truncated snapshot.</summary>
+    public void SaveFile(string path)
+    {
+        var temporary = path + ".tmp";
+        using (var file = File.Create(temporary)) Save(file);
+        File.Move(temporary, path, overwrite: true);
+    }
+
+    public static SimWorld LoadFile(string path)
+    {
+        using var file = File.OpenRead(path);
+        return Load(file);
     }
 
     /// <summary>Creates a creature with a never-used id; null when the id was already used.</summary>

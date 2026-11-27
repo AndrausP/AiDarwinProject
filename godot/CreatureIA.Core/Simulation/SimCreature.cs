@@ -230,6 +230,56 @@ public sealed class SimCreature
         world.RecordDamage(Id, zone, sourceId);
     }
 
+    /// <summary>Full state between physics steps (pending intake and damage are always empty there).</summary>
+    internal void Save(BinaryWriter w)
+    {
+        w.Write(Id);
+        w.Write(Color.R); w.Write(Color.G); w.Write(Color.B);
+        w.Write(Position.X); w.Write(Position.Y); w.Write(Position.Z);
+        w.Write(Velocity.X); w.Write(Velocity.Y); w.Write(Velocity.Z);
+        w.Write(Yaw); w.Write(OnFloor); w.Write(Fear); w.Write(HeadPitchRadians); w.Write(Gait); w.Write(Climbing);
+        w.Write(LastMove.OnFloor); w.Write(LastMove.HitWall); w.Write(LastMove.HitCeiling); w.Write(LastMove.InWater);
+        w.Write(LastMove.LandingSpeed); w.Write(LastMove.Stepped);
+        var s = Physiology;
+        w.Write(s.Energy); w.Write(s.Water); w.Write(s.BodyTemperature); w.Write(s.HeadIntegrity); w.Write(s.TorsoIntegrity);
+        w.Write(s.LegsIntegrity); w.Write(s.Fatigue); w.Write(s.Pain); w.Write(s.Libido); w.Write(s.AgeSeconds);
+        w.Write(s.IsSleeping); w.Write(s.IsAlive); w.Write((byte)s.DeathCause);
+        w.Write(MaximumAgeSeconds); w.Write(LastThreat);
+        foreach (var a in _action) w.Write(a);
+        var (target, seconds, fraction) = _dig.Save();
+        w.Write(target.HasValue);
+        if (target is { } t) { w.Write(t.X); w.Write(t.Y); w.Write(t.Z); }
+        w.Write(seconds); w.Write(fraction); w.Write(_digging);
+    }
+
+    internal static SimCreature Load(BinaryReader r)
+    {
+        var id = r.ReadUInt32();
+        var color = (r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+        var c = new SimCreature(id, new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()), color)
+        {
+            Velocity = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()),
+            Yaw = r.ReadSingle()
+        };
+        c.OnFloor = r.ReadBoolean(); c.Fear = r.ReadSingle(); c.HeadPitchRadians = r.ReadSingle(); c.Gait = r.ReadSingle();
+        c.Climbing = r.ReadBoolean();
+        c.LastMove = new VoxelMoveResult(r.ReadBoolean(), r.ReadBoolean(), r.ReadBoolean(), r.ReadBoolean(), r.ReadSingle(), r.ReadBoolean());
+        c.Physiology = new PhysiologyState
+        {
+            Energy = r.ReadDouble(), Water = r.ReadDouble(), BodyTemperature = r.ReadDouble(), HeadIntegrity = r.ReadDouble(),
+            TorsoIntegrity = r.ReadDouble(), LegsIntegrity = r.ReadDouble(), Fatigue = r.ReadDouble(), Pain = r.ReadDouble(),
+            Libido = r.ReadDouble(), AgeSeconds = r.ReadDouble(), IsSleeping = r.ReadBoolean(), IsAlive = r.ReadBoolean(),
+            DeathCause = (DeathCause)r.ReadByte()
+        };
+        c.MaximumAgeSeconds = r.ReadSingle();
+        c.LastThreat = r.ReadSingle();
+        for (var i = 0; i < c._action.Length; i++) c._action[i] = r.ReadSingle();
+        (int, int, int)? target = r.ReadBoolean() ? (r.ReadInt32(), r.ReadInt32(), r.ReadInt32()) : null;
+        c._dig.Restore(target, r.ReadSingle(), r.ReadSingle());
+        c._digging = r.ReadBoolean();
+        return c;
+    }
+
     private static float MoveToward(float from, float to, float delta) =>
         MathF.Abs(to - from) <= delta ? to : from + MathF.Sign(to - from) * delta;
 }
