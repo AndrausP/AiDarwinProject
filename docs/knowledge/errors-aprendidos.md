@@ -127,6 +127,14 @@ Cada entrada: sintoma → causa verificada → correção. Data da descoberta en
 - **Causa:** `async with server` chama `wait_closed()`, que no 3.12 espera todas as conexões fecharem; o handler não fechava o `writer`.
 - **Correção:** `writer.close()` no `finally` do handler (o `LockstepServer` já fazia).
 
+### Regressão do v3 era a curiosidade (T1.1)
+- **Sintoma:** v3 (GRU) estacionava em ~550 s de vida enquanto o v2 (MLP) subia a ~740 s com o mesmo número de updates.
+- **Diagnóstico:** 4 runs comparáveis no Sim (6 mundos × 24 000 ticks, seed 1, 374 updates cada): v2 511 → 740 s;
+  v3 controle 530 → 560; **v3 sem curiosidade 534 → 680**; v3 com lr 1e-4 486 → 501 (pior).
+- **Causa:** o bônus de novidade (RND, peso 0,02 sobre novidade normalizada) tem a mesma ordem de grandeza da recompensa
+  homeostática já escalada; distrai a política de comer/beber. Lr menor não era o problema.
+- **Correção:** v3 treina com `--curiosity 0` (`night-v3`). Curiosidade volta só com peso bem menor e medido (etapa 3).
+
 ### Paridade Sim × Godot: comparar curvas, não só médias
 - **Sintoma:** vida média aleatória 349 s (Sim) × 376 s (Godot) num primeiro teste.
 - **Verificação:** sonda que registra energia, água, temperatura, sono e vivas por tick: curvas iguais do nascimento à extinção (144 → 95 → 56 → 15 vivas). A diferença vinha do sorteio de spawn/plantas (RNG próprio do Sim, PCG32), não da física.

@@ -5,7 +5,7 @@ Formato de cada task: objetivo · depende de · entrega · aceite.
 
 | ID | Task | Depende de | Entrega | Aceite |
 |---|---|---|---|---|
-| T1.1 | **Diagnosticar a regressão do v3** (vida média caiu 474 → 392 s em `v3-gru-a`) | — | runs curtos comparáveis: v3 sem curiosidade (`--curiosity 0`), v3 com lr menor, v2 no mesmo nº de atualizações | causa identificada e registrada em `errors-aprendidos.md`, ou v3 ≥ v2 com o mesmo nº de atualizações |
+| T1.1 | **Diagnosticar a regressão do v3** (vida média caiu 474 → 392 s em `v3-gru-a`) | — | runs curtos comparáveis: v3 sem curiosidade (`--curiosity 0`), v3 com lr menor, v2 no mesmo nº de atualizações | causa identificada e registrada em `errors-aprendidos.md`, ou v3 ≥ v2 com o mesmo nº de atualizações · **✅ 2026-11-27: curiosidade (RND); v3 sem curiosidade 534 → 680 s contra 530 → 560** |
 | T1.2 | **Modo de avaliação congelada** | — | flag `--freeze` no servidor (sem updates, sem curiosidade, pesos fixos) + teste | teste prova que os pesos não mudam durante o run · **✅ 2026-11-27** (`--freeze`; teste de pesos, normalizadores e checkpoint) |
 | T1.3 | **Métrica de sono** ("dormir com fadiga alta") no gravador de episódios e no relatório | — | campos `high_fatigue_steps`, `slept_while_tired` + testes | relatório mostra a taxa por política · **✅ 2026-11-27** (fadiga alta = > 0,3) |
 | T1.4 | **Avaliação de 3 políticas** | T1.2, T1.3 | `scripts/eval-stage.ps1`: seed 0, sem respawn, aleatório × v2 × v3 congelados, N repetições; relatório comparativo | relatório com IC bootstrap gerado em `benchmarks/runs/eval-etapa1-*` · **✅ ferramenta 2026-11-27** (Sim, seed 0 com réplicas; `stage_eval.py`) |
