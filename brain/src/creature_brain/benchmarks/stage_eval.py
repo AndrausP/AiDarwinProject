@@ -3,7 +3,9 @@
 Input: one episode JSONL per policy (written by ``EpisodeRecorder``), labelled ``label=path``; the
 label ``random`` is the baseline. Optional Sim exploit reports as ``label=path`` via --exploits.
 Output: ``summary.json`` and ``summary.md`` with bootstrap 95 % intervals and the stage-1 criteria:
-life >= 3x random, eating when hungry >= 2x, drinking when thirsty >= 2x, sleeping when tired > random.
+life >= 3x random, eating when hungry >= 2x, drinking when thirsty >= 2x, and fatigue managed: sleeps when
+tired more often than random, OR spends at most half of random's share of life tired (a policy that never gets
+tired has no "tired" steps to sleep in; stage-1 review 2026-11-27).
 Nothing is inferred: a policy without episodes is an error, never a pass.
 """
 
@@ -19,6 +21,7 @@ from typing import Sequence
 import numpy as np
 
 CRITERIA = {"life_ratio": 3.0, "food_ratio": 2.0, "water_ratio": 2.0}
+TIRED_SHARE_FRACTION = 0.5  # "never tired" counts as managing fatigue when <= half of random's tired share
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +35,7 @@ class PolicyStats:
     food_rate: float
     water_rate: float
     sleep_rate: float
+    tired_share: float
     death_causes: dict[str, float]
 
 
@@ -43,8 +47,8 @@ def read_episodes(path: Path) -> list[dict]:
 
 
 def _rate(rows: Sequence[dict], numerator: str, denominator: str) -> float:
-    opportunities = sum(int(r.get(denominator, 0)) for r in rows)
-    return sum(int(r.get(numerator, 0)) for r in rows) / opportunities if opportunities else 0.0
+    opportunities = sum(float(r.get(denominator, 0)) for r in rows)
+    return sum(float(r.get(numerator, 0)) for r in rows) / opportunities if opportunities else 0.0
 
 
 def _bootstrap_mean(values: np.ndarray, generator: np.random.Generator, samples: int) -> np.ndarray:
@@ -66,6 +70,7 @@ def policy_stats(label: str, rows: Sequence[dict], generator: np.random.Generato
         food_rate=_rate(rows, "ate_while_low_energy", "low_energy_steps"),
         water_rate=_rate(rows, "drank_while_low_water", "low_water_steps"),
         sleep_rate=_rate(rows, "slept_while_tired", "high_fatigue_steps"),
+        tired_share=_rate(rows, "high_fatigue_steps", "lifetime_seconds"),
         death_causes={k: v / len(rows) for k, v in causes.most_common()},
     )
 
@@ -81,7 +86,7 @@ def evaluate(episodes: dict[str, Sequence[dict]], *, seed: int = 0, samples: int
     stats = {label: policy_stats(label, rows, generator, samples) for label, rows in episodes.items()}
     base = stats["random"]
     base_life = np.asarray([float(r["lifetime_seconds"]) for r in episodes["random"]])
-    result: dict = {"policies": {}, "criteria": CRITERIA | {"sleep": "> random"}}
+    result: dict = {"policies": {}, "criteria": CRITERIA | {"sleep": "> random, or tired share <= 0.5x random"}}
     for label, s in stats.items():
         entry = {k: getattr(s, k) for k in s.__dataclass_fields__}
         if label != "random":
@@ -96,7 +101,7 @@ def evaluate(episodes: dict[str, Sequence[dict]], *, seed: int = 0, samples: int
                 "life": entry["life_ratio"] >= CRITERIA["life_ratio"],
                 "food": entry["food_ratio"] >= CRITERIA["food_ratio"],
                 "water": entry["water_ratio"] >= CRITERIA["water_ratio"],
-                "sleep": s.sleep_rate > base.sleep_rate,
+                "sleep": s.sleep_rate > base.sleep_rate or s.tired_share <= TIRED_SHARE_FRACTION * base.tired_share,
             }
             entry["gates"] = {k: "PASS" if v else "FAIL" for k, v in gates.items()}
             entry["stage_gate"] = "PASS" if all(gates.values()) else "FAIL"

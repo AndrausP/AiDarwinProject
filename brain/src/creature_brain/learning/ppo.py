@@ -22,7 +22,9 @@ from creature_brain import ACTION_DIM, OBSERVATION_DIM
 LOG_STD_MIN = -5.0
 # std <= 1: wider Gaussians mostly saturate tanh, which wastes exploration and made
 # log-probabilities of saturated actions unreliable (entropy kept rising in run ppo-b).
-LOG_STD_MAX = 0.0
+# Lowered to -0.5 (std ~0.61) after night-v2/night-v3: the pre-tanh entropy bonus pushed every action's
+# log_std to the old cap 0 within ~3000 updates and the sampled policy drifted towards random.
+LOG_STD_MAX = -0.5
 _ACTION_EPSILON = 1e-6
 
 
