@@ -40,6 +40,9 @@ public sealed class ExploitCounters
     public long EatingNearPlant;
     public long Hungry;
     public long HungryNearPlant;
+    /// <summary>Hungry ticks near a plant with the eat action on; thirsty ticks near water with the drink action on.</summary>
+    public long HungryEatingNearPlant;
+    public long ThirstyDrinkingNearWater;
 
     public void Add(ExploitCounters other)
     {
@@ -55,6 +58,8 @@ public sealed class ExploitCounters
         EatingNearPlant += other.EatingNearPlant;
         Hungry += other.Hungry;
         HungryNearPlant += other.HungryNearPlant;
+        HungryEatingNearPlant += other.HungryEatingNearPlant;
+        ThirstyDrinkingNearWater += other.ThirstyDrinkingNearWater;
     }
 
     public static double Ratio(long part, long whole) => whole == 0 ? 0 : (double)part / whole;
@@ -696,6 +701,7 @@ public sealed class SimWorld
             {
                 Exploits.Thirsty++;
                 if (near) Exploits.ThirstyNearWater++;
+                if (near && creature.Action[6] > 0.5f) Exploits.ThirstyDrinkingNearWater++;
             }
             var plant = Plants.HasPlantWithin(p, SimCreature.EatReachMeters);
             if (plant)
@@ -707,6 +713,7 @@ public sealed class SimWorld
             {
                 Exploits.Hungry++;
                 if (plant) Exploits.HungryNearPlant++;
+                if (plant && creature.Action[5] > 0.5f) Exploits.HungryEatingNearPlant++;
             }
         }
     }

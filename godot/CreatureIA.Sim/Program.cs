@@ -134,6 +134,8 @@ var report = string.Create(CultureInfo.InvariantCulture,
     $"\"eat_on_when_near_plant\": {ExploitCounters.Ratio(exploits.EatingNearPlant, exploits.NearPlant):F6}, " +
     $"\"hungry_share\": {exploits.Share(exploits.Hungry):F6}, " +
     $"\"near_plant_when_hungry\": {ExploitCounters.Ratio(exploits.HungryNearPlant, exploits.Hungry):F6}, " +
+    $"\"eat_on_when_hungry_near_plant\": {ExploitCounters.Ratio(exploits.HungryEatingNearPlant, exploits.HungryNearPlant):F6}, " +
+    $"\"drink_on_when_thirsty_near_water\": {ExploitCounters.Ratio(exploits.ThirstyDrinkingNearWater, exploits.ThirstyNearWater):F6}, " +
     $"\"herd_biomass_start\": {herdBiomassStart:F2}, \"herd_biomass_end\": {worlds.HerdBiomass():F2}, " +
     $"\"births\": {population.Births}, \"conceptions\": {population.Conceptions}, \"inviable\": {population.Inviable}, " +
     $"\"receptive_ticks\": {population.ReceptiveTicks}, \"fertile_male_ticks\": {population.FertileMaleTicks}, " +

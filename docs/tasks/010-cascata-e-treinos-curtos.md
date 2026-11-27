@@ -65,3 +65,22 @@ Nenhuma dessas é script de comportamento. O cérebro continua decidindo tudo, e
   - Os filhotes morrem com 143 s: são minúsculos, e a reserva acompanha a massa.
   - "Come quando há planta perto" ficou em 25,5 %, **igual ao aleatório: o cérebro ainda não aprendeu a comer**.
 - **Próximo:** `a1-mlp` (degrau A, sem nascimentos), para ver se comer é aprendido. Depois: filhote nasce com reserva mínima ou é alimentado.
+
+### `a1-mlp` (degrau A, sem nascimentos, 24 000 ticks, 6 mundos) × sonda aleatória (`diag-food-a`, 6000 ticks)
+| | aleatório | `a1` (treinado) |
+|---|---|---|
+| perto de planta | 8,4 % | **49 %** |
+| com fome e perto de planta | 4,2 % | **51 %** |
+| come quando perto de planta | 24,7 % | 23,4 % |
+| come **com fome** perto de planta | 24,3 % | (contador novo; medir no próximo run) |
+| bebe quando perto d'água | 24,7 % | **9,7 %** |
+| tempo com fome / com sede | 44 % / 29 % | 38 % / 44 % |
+
+**Leitura:**
+- O cérebro **aprendeu a ficar perto de comida** (49 % contra 8 %), mas **não aprendeu a apertar "comer"**.
+- Desaprendeu beber: bebe menos que o aleatório.
+- **Hipótese a testar:** comer ou beber já saciado, acima do setpoint 0,8, dá recompensa negativa (`|x − setpoint|` sobe). Como na maior parte do tempo a criatura não está com fome, "comer pouco" ganha.
+
+**Próximo microteste:**
+1. Rodar de novo com os contadores condicionais ("come com fome", "bebe com sede"). Se continuar ~24 %, a política não separa com fome de sem fome.
+2. Correção candidata: não punir passar do setpoint ao comer ou beber (saciedade = 0 de recompensa, não negativa), como foi feito com a libido.
