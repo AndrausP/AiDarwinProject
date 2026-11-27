@@ -113,7 +113,11 @@ var exploits = worlds.Exploits();
 var report = string.Create(CultureInfo.InvariantCulture,
     $"{{\"brain_ticks\": {brainTick}, \"stop\": \"{reason}\", \"worlds\": {options.Worlds}, \"replicas\": {(options.Replicas ? "true" : "false")}, " +
     $"\"seed\": {options.Seed}, \"creature_ticks\": {exploits.CreatureTicks}, \"on_leaves_share\": {exploits.Share(exploits.OnLeaves):F6}, " +
-    $"\"buried_share\": {exploits.Share(exploits.Buried):F6}, \"at_border_share\": {exploits.Share(exploits.AtBorder):F6}}}");
+    $"\"buried_share\": {exploits.Share(exploits.Buried):F6}, \"at_border_share\": {exploits.Share(exploits.AtBorder):F6}, " +
+    $"\"near_water_share\": {exploits.Share(exploits.NearWater):F6}, " +
+    $"\"drink_on_when_near\": {ExploitCounters.Ratio(exploits.DrinkingNearWater, exploits.NearWater):F6}, " +
+    $"\"thirsty_share\": {exploits.Share(exploits.Thirsty):F6}, " +
+    $"\"near_water_when_thirsty\": {ExploitCounters.Ratio(exploits.ThirstyNearWater, exploits.Thirsty):F6}}}");
 Console.Error.WriteLine($"[exploits] {report}");
 if (options.ReportFile is not null) File.WriteAllText(options.ReportFile, report + Environment.NewLine);
 return 0;

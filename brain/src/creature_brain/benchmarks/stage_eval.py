@@ -120,9 +120,12 @@ def to_markdown(result: dict, exploits: dict[str, dict]) -> str:
     for label, p in result["policies"].items():
         lines.append(f"- {label}: " + ", ".join(f"{k} {v:.0%}" for k, v in p["death_causes"].items()))
     if exploits:
-        lines += ["", "| Vigia de exploits | em folhas | enterrada | na borda |", "|---|---|---|---|"]
+        lines += ["", "| Vigia (Sim) | em folhas | enterrada | na borda | perto d'água | bebe quando perto | c/ sede perto d'água |",
+                  "|---|---|---|---|---|---|---|"]
         for label, e in exploits.items():
-            lines.append(f"| {label} | {e['on_leaves_share']:.2%} | {e['buried_share']:.2%} | {e['at_border_share']:.2%} |")
+            lines.append(
+                f"| {label} | {e['on_leaves_share']:.2%} | {e['buried_share']:.2%} | {e['at_border_share']:.2%} | "
+                f"{e.get('near_water_share', 0):.2%} | {e.get('drink_on_when_near', 0):.1%} | {e.get('near_water_when_thirsty', 0):.2%} |")
     return "\n".join(lines) + "\n"
 
 

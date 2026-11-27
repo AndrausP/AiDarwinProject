@@ -20,6 +20,12 @@ public sealed class ExploitCounters
     public long OnLeaves;
     public long Buried;
     public long AtBorder;
+    /// <summary>Behaviour probe: ticks within drinking reach of fresh water, and of those, with the drink action on.</summary>
+    public long NearWater;
+    public long DrinkingNearWater;
+    /// <summary>Ticks with water below 0.35 (thirsty), and of those, near drinkable water.</summary>
+    public long Thirsty;
+    public long ThirstyNearWater;
 
     public void Add(ExploitCounters other)
     {
@@ -27,7 +33,13 @@ public sealed class ExploitCounters
         OnLeaves += other.OnLeaves;
         Buried += other.Buried;
         AtBorder += other.AtBorder;
+        NearWater += other.NearWater;
+        DrinkingNearWater += other.DrinkingNearWater;
+        Thirsty += other.Thirsty;
+        ThirstyNearWater += other.ThirstyNearWater;
     }
+
+    public static double Ratio(long part, long whole) => whole == 0 ? 0 : (double)part / whole;
 
     public double Share(long count) => CreatureTicks == 0 ? 0 : (double)count / CreatureTicks;
 }
@@ -233,6 +245,17 @@ public sealed class SimWorld
             if (BlockTypes.IsFoliage(grid.GetAtWorld(p.X, p.Y - 0.1f, p.Z))) Exploits.OnLeaves++;
             if (BlockTypes.IsSolid(grid.GetAtWorld(p.X, p.Y + SimCreature.Shape.Height + 0.1f, p.Z))) Exploits.Buried++;
             if (MathF.Abs(p.X) > edge || MathF.Abs(p.Z) > edge) Exploits.AtBorder++;
+            var near = Terrain.IsNearDrinkableWater(p);
+            if (near)
+            {
+                Exploits.NearWater++;
+                if (creature.Action[6] > 0.5f) Exploits.DrinkingNearWater++;
+            }
+            if (creature.Physiology.Water < 0.35)
+            {
+                Exploits.Thirsty++;
+                if (near) Exploits.ThirstyNearWater++;
+            }
         }
     }
 
