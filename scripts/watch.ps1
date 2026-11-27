@@ -4,6 +4,7 @@
 #   .\scripts\watch.ps1                       # trained brain (PPO), keeps adapting
 #   .\scripts\watch.ps1 -Policy random        # untrained baseline, for comparison
 #   .\scripts\watch.ps1 -Fresh                # restart the watch copy from the trained snapshot
+#   .\scripts\watch.ps1 -Brain mlp -Checkpoint benchmarks\runs\night-v2\ppo.pt -Fresh -Frozen   # a Sim-trained run, as evaluated
 #   .\scripts\watch.ps1 -Showcase             # white test room: every example side by side
 param(
     [ValidateSet("ppo", "random")] [string]$Policy = "ppo",
@@ -12,6 +13,7 @@ param(
     [string]$Checkpoint = "",   # default: the latest run of the chosen brain (v3-gru-a / v2-ppo-a)
     [int]$Seed = 1337,
     [switch]$Fresh,
+    [switch]$Frozen,              # watch the evaluated policy exactly: fixed weights, no online learning
     [switch]$Showcase             # white test room with every tree/shrub/block example side by side
 )
 $ErrorActionPreference = "Stop"
@@ -43,7 +45,8 @@ $env:CREATURE_IA_BRAIN_PORT = "5555"
 $serverArgs = @("-m", "creature_brain.bridge.server", "--port", "5555", "--policy", $Policy,
     "--respawn", "--exit-on-disconnect", "--episodes", (Join-Path $watchDir "$Policy-episodes.jsonl"))
 if ($Policy -eq "ppo") {
-    $serverArgs += @("--brain", $Brain, "--device", "cuda", "--checkpoint", $watchBrain, "--metrics", (Join-Path $watchDir "metrics.csv"))
+    $serverArgs += @("--brain", $Brain, "--device", "cuda", "--checkpoint", $watchBrain)
+    $serverArgs += if ($Frozen) { @("--freeze") } else { @("--metrics", (Join-Path $watchDir "metrics.csv")) }
 }
 $server = Start-Process -FilePath $python -ArgumentList $serverArgs -NoNewWindow -PassThru `
     -RedirectStandardError (Join-Path $watchDir "server.log") -RedirectStandardOutput (Join-Path $watchDir "server.out")

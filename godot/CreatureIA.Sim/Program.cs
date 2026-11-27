@@ -70,8 +70,13 @@ if (config.PhysicsHz != SimWorld.PhysicsHz || config.BrainHz != SimWorld.Physics
 double simMs = 0, observeMs = 0, waitMs = 0;
 var window = Stopwatch.StartNew();
 ulong brainTick = 0;
+var wallClock = Stopwatch.StartNew();
+var timedOut = false;
 for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
 {
+    // Wall-clock budget (e.g. "train until the morning evaluation"): only decides when to stop,
+    // never what happens inside the simulation, so determinism per tick is untouched.
+    if (options.MaxMinutes > 0 && wallClock.Elapsed.TotalMinutes >= options.MaxMinutes) { timedOut = true; break; }
     var t0 = Stopwatch.GetTimestamp();
     worlds.StepBrainTick();
     var t1 = Stopwatch.GetTimestamp();
@@ -101,7 +106,7 @@ for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
         window.Restart();
     }
 }
-var reason = options.Ticks > 0 && brainTick >= (ulong)options.Ticks ? "horizon" : "extinct";
+var reason = timedOut ? "time budget" : options.Ticks > 0 && brainTick >= (ulong)options.Ticks ? "horizon" : "extinct";
 if (options.WorldsDir is not null) worlds.SaveAll(options.WorldsDir);
 Console.Error.WriteLine($"[run] stopping at brain tick {brainTick}: {reason}");
 var exploits = worlds.Exploits();
@@ -149,6 +154,7 @@ internal sealed record Options
     /// <summary>World snapshots (T2.0c): resume from here when present; saved at exit and every SaveEvery ticks.</summary>
     public string? WorldsDir { get; init; }
     public int SaveEvery { get; init; } = 6000;
+    public double MaxMinutes { get; init; }
 
     public static Options Parse(string[] args)
     {
@@ -173,6 +179,7 @@ internal sealed record Options
                 "--report-file" => o with { ReportFile = Next() },
                 "--worlds-dir" => o with { WorldsDir = Next() },
                 "--save-every" => o with { SaveEvery = NextInt() },
+                "--max-minutes" => o with { MaxMinutes = double.Parse(Next(), CultureInfo.InvariantCulture) },
                 "--report-every" => o with { ReportEvery = NextInt() },
                 _ => throw new ArgumentException($"unknown option {args[i]}")
             };

@@ -259,6 +259,7 @@ def main() -> None:
     )
     recorders: list = []
     episodes_stream = None
+    policy = None
     try:
         if args.policy == "ppo":
             from creature_brain.learning.online import OnlinePPOConfig, OnlinePPOPolicy
@@ -309,6 +310,9 @@ def main() -> None:
     except KeyboardInterrupt:
         LOGGER.info("brain bridge stopped")
     finally:
+        flush = getattr(policy, "flush", None)
+        if callable(flush):
+            flush()  # keep the last updates when the simulator stops between periodic saves
         for recorder in recorders:
             recorder.close()  # idempotent: already closed at disconnect
             LOGGER.info("recorded %d episodes, tick_loss=%d", recorder.episodes_written, recorder.tick_loss)

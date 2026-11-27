@@ -432,6 +432,21 @@ class OnlinePPOPolicy:
                 },
             )
 
+    def flush(self) -> None:
+        """Save the latest weights now (end of a run): periodic saves happen only every N updates."""
+        checkpoint = self.online_config.checkpoint_path
+        if self.online_config.frozen or checkpoint is None or self.update_count == 0:
+            return
+        self.trainer.save_checkpoint(
+            checkpoint,
+            step=self.update_count,
+            extra={
+                "observation_rms": self.observation_rms.state_dict(),
+                "return_rms": self.return_rms.state_dict(),
+                "novelty_rms": self.novelty_rms.state_dict(),
+            },
+        )
+
     def _append_metrics(self, steps: int, mean_reward: float, metrics: UpdateMetrics) -> None:
         path = self.online_config.metrics_path
         assert path is not None

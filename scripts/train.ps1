@@ -18,6 +18,7 @@ param(
     [int]$Lakes = 6,
     [double]$Curiosity = 0.02,
     [double]$LearningRate = 3e-4,
+    [double]$MaxMinutes = 0,        # also stop cleanly after this many wall-clock minutes (0 = no limit)
     [switch]$NoRespawn,
     [switch]$NoBuild                # skip the Release build (parallel runs: build once beforehand)
 )
@@ -70,6 +71,7 @@ $simArgs = @("--port", $Port, "--worlds", $Worlds, "--seed", $Seed, "--populatio
     # World snapshots (T2.0c): re-running the same RunName continues the same worlds, not fresh ones.
     "--worlds-dir", (Join-Path $runDir "worlds"))
 if ($NoRespawn) { $simArgs += "--quit-when-extinct" }
+if ($MaxMinutes -gt 0) { $simArgs += @("--max-minutes", $MaxMinutes.ToString([Globalization.CultureInfo]::InvariantCulture)) }
 Write-Host "training $Policy ($Brain) on CreatureIA.Sim: $Worlds world(s) x $Population for $Ticks ticks -> $runDir"
 $simProcess = Start-Process -FilePath $sim -ArgumentList $simArgs -NoNewWindow -PassThru `
     -RedirectStandardError (Join-Path $runDir "sim.log") -RedirectStandardOutput (Join-Path $runDir "sim.out")
