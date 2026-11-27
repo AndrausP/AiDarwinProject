@@ -75,6 +75,29 @@ public sealed class PlantField
         }
     }
 
+    /// <summary>True when a live plant is within <paramref name="radius"/> (probe only; eats nothing).</summary>
+    public bool HasPlantWithin(Vector3 position, float radius)
+    {
+        var (minX, maxX, minZ, maxZ) = CellRange(position, radius);
+        for (var cz = minZ; cz <= maxZ; cz++)
+        for (var cx = minX; cx <= maxX; cx++)
+            foreach (var i in _cells[cz * _cellsPerSide + cx])
+                if (_plants[i].Biomass > Depleted && Vector3.Distance(position, _plants[i].Position) < radius) return true;
+        return false;
+    }
+
+    /// <summary>Total live biomass within <paramref name="radius"/> (reports).</summary>
+    public float BiomassWithin(Vector3 position, float radius)
+    {
+        var total = 0f;
+        var (minX, maxX, minZ, maxZ) = CellRange(position, radius);
+        for (var cz = minZ; cz <= maxZ; cz++)
+        for (var cx = minX; cx <= maxX; cx++)
+            foreach (var i in _cells[cz * _cellsPerSide + cx])
+                if (Vector3.Distance(position, _plants[i].Position) < radius) total += _plants[i].Biomass;
+        return total;
+    }
+
     public float ConsumeNearest(Vector3 position, float radius, float maximumAmount, out bool thorny)
     {
         thorny = false;

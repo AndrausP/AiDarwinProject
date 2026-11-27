@@ -29,6 +29,8 @@ public sealed class SimCreature
     public const float ClimbSpeed = 1.5f;
     /// <summary>Seconds of fed adult life for libido to go from 0 to 1.</summary>
     public const float LibidoRiseSeconds = 600f;
+    /// <summary>A plant within this distance of the body can be eaten.</summary>
+    public const float EatReachMeters = 2f;
     /// <summary>Extra fatigue per second while swimming in deep water (fins make it cheaper).</summary>
     public const double SwimFatiguePerSecond = 0.004;
     public const float FeedReachMeters = 2f;
@@ -165,9 +167,17 @@ public sealed class SimCreature
         // Metabolism applies Mass^0.75 itself: hand it the per-unit-mass rate of the body plan + senses.
         var massTerm = Math.Pow(traits.Mass, BodyPlan.KleiberExponent);
         var pregnancy = IsPregnant ? 1.3 : 1.0;
+        // Energy is a fraction of the reserves, and reserves scale with body mass: every energy flow (costs here,
+        // food in StepPhysiology) is divided by the mass. Absolute costs follow Kleiber (M^0.75), so the time to
+        // starve grows as M^0.25. Without this a big founder (B, mass ~4) starved in 74 s, faster than a small one.
+        var reserve = Math.Max(MinimumReserve, traits.Mass);
         _traits = traits with
         {
-            BasalMetabolicRate = (plan.BasalMetabolicRate + Senses.ExtraBasalRate) * pregnancy / massTerm,
+            BasalMetabolicRate = (plan.BasalMetabolicRate + Senses.ExtraBasalRate) * pregnancy / massTerm / reserve,
+            MovementCost = traits.MovementCost / reserve,
+            TurnCost = traits.TurnCost / reserve,
+            BrainCost = traits.BrainCost / reserve,
+            ShiverEnergyCost = traits.ShiverEnergyCost / reserve,
         };
     }
 
@@ -277,7 +287,7 @@ public sealed class SimCreature
             return;
         }
         if (Carnivory > 0.3f && world.TryBite(this, mouth, dt)) return;
-        var amount = world.Plants.ConsumeNearest(Position, 2f, dt * 0.3f, out var thorny);
+        var amount = world.Plants.ConsumeNearest(Position, EatReachMeters, dt * 0.3f, out var thorny);
         _energyIntake += amount * 0.8f * plantEfficiency;
         if (amount > 0f) world.RecordAte(Id, 0, amount);
         if (thorny && amount > 0f) ApplyDamage(world, BodyZone.Head, amount * 0.08f, DeathCause.HeadInjury);
@@ -297,6 +307,11 @@ public sealed class SimCreature
     }
 
     internal void ReceiveFood(double energy) => _energyIntake += energy;
+
+    private const double MinimumReserve = 0.02;
+
+    /// <summary>Energy reserve relative to the reference animal: the current (grown) body mass.</summary>
+    public double ReserveMass => Math.Max(MinimumReserve, _traits.Mass);
 
     internal void SetEnergyForTest(double energy) => Physiology = Physiology with { Energy = Math.Clamp(energy, 0.0, 1.0), Water = 1.0 };
 
@@ -337,7 +352,7 @@ public sealed class SimCreature
             Thrust = working ? 1f : action[0],
             Gait = working ? 1f : Gait,
             Turn = action[1],
-            EnergyIntake = _energyIntake,
+            EnergyIntake = _energyIntake / ReserveMass,
             WaterIntake = _waterIntake,
             Sleeping = action[7] > 0.5f && Velocity.LengthSquared() < 0.1f && !SwimmingDeep,
             WakeRequested = action[7] < 0f,

@@ -95,6 +95,11 @@ public sealed class MultiWorld
         writer.Flush();
     }
 
+    /// <summary>Mean live plant biomass within 30 m of each founding species' home range (food probe).</summary>
+    public double HerdBiomass() =>
+        _worlds.Average(w => Enum.GetValues<CreatureIA.Core.Genetics.FounderSpecies>()
+            .Average(s => (double)w.Plants.BiomassWithin(w.HerdHome(s), 30f)));
+
     public PopulationCounters PopulationTotals()
     {
         var total = new PopulationCounters();

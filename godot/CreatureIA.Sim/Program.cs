@@ -28,6 +28,7 @@ var settings = new SimWorldSettings
 var clock = Stopwatch.StartNew();
 var resumed = options.WorldsDir is not null && MultiWorld.HasSnapshots(options.WorldsDir, options.Worlds);
 var worlds = resumed ? new MultiWorld(options.WorldsDir!, options.Worlds) : new MultiWorld(settings, options.Worlds, options.Replicas);
+var herdBiomassStart = worlds.HerdBiomass();
 var seeds = resumed ? $"resumed from {options.WorldsDir}"
     : options.Replicas ? $"terrain seed {options.Seed}, salts 0..{options.Worlds - 1}" : $"seeds {options.Seed}..{options.Seed + options.Worlds - 1}";
 Console.Error.WriteLine($"[sim] {options.Worlds} world(s) x {options.Population} creatures generated in {clock.ElapsedMilliseconds} ms " +
@@ -129,6 +130,11 @@ var report = string.Create(CultureInfo.InvariantCulture,
     $"\"drink_on_when_near\": {ExploitCounters.Ratio(exploits.DrinkingNearWater, exploits.NearWater):F6}, " +
     $"\"thirsty_share\": {exploits.Share(exploits.Thirsty):F6}, " +
     $"\"near_water_when_thirsty\": {ExploitCounters.Ratio(exploits.ThirstyNearWater, exploits.Thirsty):F6}, " +
+    $"\"near_plant_share\": {exploits.Share(exploits.NearPlant):F6}, " +
+    $"\"eat_on_when_near_plant\": {ExploitCounters.Ratio(exploits.EatingNearPlant, exploits.NearPlant):F6}, " +
+    $"\"hungry_share\": {exploits.Share(exploits.Hungry):F6}, " +
+    $"\"near_plant_when_hungry\": {ExploitCounters.Ratio(exploits.HungryNearPlant, exploits.Hungry):F6}, " +
+    $"\"herd_biomass_start\": {herdBiomassStart:F2}, \"herd_biomass_end\": {worlds.HerdBiomass():F2}, " +
     $"\"births\": {population.Births}, \"conceptions\": {population.Conceptions}, \"inviable\": {population.Inviable}, " +
     $"\"receptive_ticks\": {population.ReceptiveTicks}, \"fertile_male_ticks\": {population.FertileMaleTicks}, " +
     $"\"male_mate_choices\": {population.MaleMateChoices}, \"mate_opportunities\": {population.MateOpportunities}, " +

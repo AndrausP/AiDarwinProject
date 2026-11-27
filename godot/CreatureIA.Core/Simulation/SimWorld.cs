@@ -35,6 +35,11 @@ public sealed class ExploitCounters
     /// <summary>Ticks with water below 0.35 (thirsty), and of those, near drinkable water.</summary>
     public long Thirsty;
     public long ThirstyNearWater;
+    /// <summary>Food probe: ticks within eating reach of a live plant, and of those, eating; hungry (energy &lt; 0.35) ticks and of those near a plant.</summary>
+    public long NearPlant;
+    public long EatingNearPlant;
+    public long Hungry;
+    public long HungryNearPlant;
 
     public void Add(ExploitCounters other)
     {
@@ -46,6 +51,10 @@ public sealed class ExploitCounters
         DrinkingNearWater += other.DrinkingNearWater;
         Thirsty += other.Thirsty;
         ThirstyNearWater += other.ThirstyNearWater;
+        NearPlant += other.NearPlant;
+        EatingNearPlant += other.EatingNearPlant;
+        Hungry += other.Hungry;
+        HungryNearPlant += other.HungryNearPlant;
     }
 
     public static double Ratio(long part, long whole) => whole == 0 ? 0 : (double)part / whole;
@@ -687,6 +696,17 @@ public sealed class SimWorld
             {
                 Exploits.Thirsty++;
                 if (near) Exploits.ThirstyNearWater++;
+            }
+            var plant = Plants.HasPlantWithin(p, SimCreature.EatReachMeters);
+            if (plant)
+            {
+                Exploits.NearPlant++;
+                if (creature.Action[5] > 0.5f) Exploits.EatingNearPlant++;
+            }
+            if (creature.Physiology.Energy < 0.35)
+            {
+                Exploits.Hungry++;
+                if (plant) Exploits.HungryNearPlant++;
             }
         }
     }
