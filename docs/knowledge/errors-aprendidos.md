@@ -99,3 +99,35 @@ Cada entrada: sintoma → causa verificada → correção. Data da descoberta en
 
 ### Lição de método
 - Melhora entre blocos de treino com mapas diferentes era variação de mapa. Só a avaliação em mapa reservado contra baseline na mesma seed é evidência.
+
+## Simulador próprio e desempenho (2026-11-27, madrugada)
+
+### Mais mundos Godot não aceleravam o treino
+- **Sintoma:** 3 → 6 mundos Godot: ~72 updates/min nos dois casos. GPU em 5–10 %, cada Godot a 100 % de um núcleo.
+- **Causa:** o servidor Python atende cada mundo como sessão própria (um forward por mundo por tick e um update PPO por mundo a cada 64 ticks), tudo numa thread. O Godot gira a 100 % mesmo pausado esperando o cérebro (laço do motor), então o uso de CPU não mostra o gargalo.
+- **Correção:** `CreatureIA.Sim` junta todos os mundos num STEP só (ids globais): um forward por tick para todas as criaturas.
+
+### Update do v3 lento: GRUCell passo a passo
+- **Sintoma:** update PPO do v3 ~1,8 s por rollout (98 % do tempo do cérebro num benchmark isolado); v2 0,27 s.
+- **Causa:** `RecurrentActorCritic.sequence` fazia 64 chamadas de `GRUCell` (frente e trás) por minibatch.
+- **Correção:** `nn.GRU` (cuDNN) por segmento entre reinícios de vida; mesma matemática (teste contra GRUCell de referência), checkpoints antigos remapeados no load. Update 1,8 s → 0,43 s.
+
+### Overhead de Python por criatura no cérebro
+- **Sintoma:** perfil com 288 criaturas: ~45 ms/tick fora da rede (recompensa 22 ms, decodificar STEP 12 ms, normalizar observação 11 ms).
+- **Causa:** recompensa calculada criatura a criatura com validação em Python; STEP convertido em tupla de 288 000 floats; `RunningMeanStd` em numpy float64 na CPU.
+- **Correção:** `HomeostaticReward.compute_totals` vetorizada (teste de igualdade com a escalar), `ObservationRows` (linhas numpy preguiçosas), estatística e normalização na GPU em float64. Cérebro 132 → 80 ms/tick.
+
+### Dois `dotnet build` do mesmo projeto em paralelo
+- **Sintoma:** `CreatureIA.Sim build failed` em um dos dois treinos lançados juntos.
+- **Causa:** os dois builds escrevem o mesmo `obj/`; e um Sim rodando trava o exe de `bin/Release`.
+- **Correção:** o script noturno compila uma vez e passa `-NoBuild`; cada run executa uma cópia do Sim em `benchmarks/runs/<run>/sim/` (também guarda a versão exata usada).
+
+### Servidor asyncio não terminava depois do cliente sair (Python 3.12)
+- **Sintoma:** servidor de sonda nunca escrevia o arquivo final.
+- **Causa:** `async with server` chama `wait_closed()`, que no 3.12 espera todas as conexões fecharem; o handler não fechava o `writer`.
+- **Correção:** `writer.close()` no `finally` do handler (o `LockstepServer` já fazia).
+
+### Paridade Sim × Godot: comparar curvas, não só médias
+- **Sintoma:** vida média aleatória 349 s (Sim) × 376 s (Godot) num primeiro teste.
+- **Verificação:** sonda que registra energia, água, temperatura, sono e vivas por tick: curvas iguais do nascimento à extinção (144 → 95 → 56 → 15 vivas). A diferença vinha do sorteio de spawn/plantas (RNG próprio do Sim, PCG32), não da física.
+- **Lição:** validar ambiente novo por trajetória média por tick com a mesma política, não por um único número de resumo.

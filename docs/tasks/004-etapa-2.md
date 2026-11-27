@@ -2,8 +2,8 @@
 
 **Depende de:** T1.8 (etapa 1 fechada) · **Decisões de origem:** `002-voxel-evolucao.md` · **Fecha com:** T2.9.
 
-## Decisões pendentes que bloqueiam tasks (resolver antes de começar)
-| # | Pergunta | Recomendação | Bloqueia |
+## Decisões (D1–D4 adotadas em 2026-11-27 pelo agente com autonomia delegada; registro em `007-noite-2026-11-27.md`)
+| # | Pergunta | Recomendação (**adotada**) | Bloqueia |
 |---|---|---|---|
 | D1 | **Espécies iniciais:** o plano antigo diz "herbívoro + carnívoro"; o novo diz "A vive 3 anos, B vive 20". Qual a dieta de cada uma? | **3 espécies:** A herbívoro pequeno (r, 3 anos), B herbívoro grande (K, 20 anos), C carnívoro médio (~8 anos, minoria) | T2.5, T2.6 |
 | D2 | **Quem é dono da genética:** Python (como no plano antigo) ou C# Core? | **C# Core**: o simulador roda tudo localmente; o Python só recebe os genes expressos | T2.3 |
@@ -14,11 +14,11 @@
 | ID | Task | Depende de | Entrega | Aceite |
 |---|---|---|---|---|
 | **T2.0** | **Simulador próprio** | | | |
-| T2.0a | Mover para o Core os sentidos (visão, olfato, som), as plantas, o corpo da criatura e o campo sensorial | T1.8 | `CreatureIA.Core/Creatures`, `/Senses`; Godot passa a usar o Core | teste de paridade: mesma seed → mesma observação (tolerância float) |
-| T2.0b | `CreatureIA.Sim`: console .NET, N mundos em threads, lote de observações, ponte (TCP em lote primeiro; depois memória compartilhada) | T2.0a | executável + `scripts/train.ps1` | ≥ 5× passos/s contra o Godot headless na mesma máquina, determinístico por mundo |
+| T2.0a | Mover para o Core os sentidos (visão, olfato, som), as plantas, o corpo da criatura e o campo sensorial | T1.8 | `CreatureIA.Core/Creatures`, `/Senses`; Godot passa a usar o Core | teste de paridade: mesma seed → mesma observação (tolerância float) · **⏳ 2026-11-27: lógica portada em `CreatureIA.Core/Simulation` (paridade estatística validada); falta o Godot passar a usar o Core** |
+| T2.0b | `CreatureIA.Sim`: console .NET, N mundos em threads, lote de observações, ponte (TCP em lote primeiro; depois memória compartilhada) | T2.0a | executável + `scripts/train.ps1` | ≥ 5× passos/s contra o Godot headless na mesma máquina, determinístico por mundo · **✅ 2026-11-27 (TCP em lote; v3 ~3,8× por run e 2 runs simultâneos; memória compartilhada fica para depois)** |
 | T2.0c | **Persistência do mundo:** snapshot atômico (blocos editados, criaturas, genomas, plantas, relógio, RNG) e retomada | T2.0b | `WorldSnapshot` + testes | parar e retomar dá a mesma continuação (hash de estado) |
 | T2.0d | Godot como visualizador do Sim (D4): abre um snapshot ou acompanha ao vivo | T2.0c | `watch.ps1 -Sim` | assistir um run do Sim sem re-simular |
-| T2.0e | Cérebro mais barato: fp16 + GRU fundido no treino; benchmark notebook (3050) × desktop (2060) | T1.8 | `--amp`, relatório | ≥ 1,5× atualizações/s sem perda na avaliação |
+| T2.0e | Cérebro mais barato: fp16 + GRU fundido no treino; benchmark notebook (3050) × desktop (2060) | T1.8 | `--amp`, relatório | ≥ 1,5× atualizações/s sem perda na avaliação · **⏳ 2026-11-27: GRU fundido (update 4,2×) e overhead Python cortado (cérebro 132 → 80 ms/tick); falta fp16** |
 | **T2.1** | **Ilha e clima** | | | |
 | T2.1a | Gerador da ilha: oceano salgado (bloco `SaltWater`), praias, cordilheira nevada, rios das nascentes ao mar, lagos, biomas por clima regional; sem parede | T2.0a | `IslandGenerator` + testes (rio conecta montanha ao mar, mar não mata a sede) | screenshot + testes |
 | T2.1b | Nadar cansa; mar aberto mata por exaustão ou frio (nova causa de morte: afogamento) | T2.1a | fisiologia + protocolo (causa de morte) | teste: nadar indefinidamente leva à morte |

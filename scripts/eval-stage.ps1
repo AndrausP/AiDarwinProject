@@ -12,7 +12,8 @@ param(
     [int]$Plants = 1400,            # the default world, not the training curriculum
     [int]$Lakes = 6,
     [int]$BasePort = 5600,
-    [switch]$Deterministic
+    [switch]$Deterministic,
+    [switch]$NoBuild                # use the newest existing Sim build (e.g. while a training run locks bin\Release)
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath "$PSScriptRoot\..").Path
@@ -23,8 +24,10 @@ $env:CUBLAS_WORKSPACE_CONFIG = ":4096:8"
 $env:PYTHONPATH = Join-Path $root "brain\src"
 $python = Join-Path $root ".venv\Scripts\python.exe"
 
-& (Join-Path $env:DOTNET_ROOT "dotnet.exe") build (Join-Path $root "godot\CreatureIA.Sim\CreatureIA.Sim.csproj") -c Release -v q -nologo | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "CreatureIA.Sim build failed." }
+if (-not $NoBuild) {
+    & (Join-Path $env:DOTNET_ROOT "dotnet.exe") build (Join-Path $root "godot\CreatureIA.Sim\CreatureIA.Sim.csproj") -c Release -v q -nologo | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "CreatureIA.Sim build failed." }
+}
 $built = Get-ChildItem -LiteralPath (Join-Path $root "godot\CreatureIA.Sim\bin") -Recurse -Filter "CreatureIA.Sim.exe" |
     Where-Object { $_.FullName -notmatch '\\Debug\\' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 $simDir = Join-Path $outDir "sim"
