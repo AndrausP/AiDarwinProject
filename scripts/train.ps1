@@ -27,6 +27,8 @@ param(
     [switch]$NoBirths,
     [switch]$Control,
     [switch]$Island,
+    [double]$Instinct = 0.5,        # etapa 2: inherited instinct strength (T2.6a); 0 = off (always off with -NoBirths)
+    [int]$Rollout = 64,             # PPO rollout / GRU replay window (T2.6b: 256 for long memory)
     [switch]$Amp,                   # gru only: fp16 autocast in the update (T2.0e; validate on a seed-0 eval first)
     [switch]$NoBuild                # skip the Release build (parallel runs: build once beforehand)
 )
@@ -67,6 +69,8 @@ if ($Policy -eq "ppo") {
         "--metrics", (Join-Path $runDir "metrics.csv"), "--curiosity", $Curiosity.ToString($inv), "--lr", $LearningRate.ToString($inv))
 }
 if ($Amp -and $Policy -eq "ppo") { $serverArgs += "--amp" }
+if ($Policy -eq "ppo") { $serverArgs += @("--rollout", $Rollout) }
+if ($Instinct -gt 0 -and -not $NoBirths) { $serverArgs += @("--instinct", $Instinct.ToString($inv)) }
 $env:PYTHONPATH = Join-Path $root "brain\src"
 $server = Start-Process -FilePath $python -ArgumentList $serverArgs -NoNewWindow -PassThru `
     -RedirectStandardError (Join-Path $runDir "server.log") -RedirectStandardOutput (Join-Path $runDir "server.out")

@@ -243,6 +243,10 @@ def _parse_args() -> argparse.Namespace:
                         help="PPO only: frozen evaluation (fixed weights/normalisers, no updates, no checkpoint writes)")
     parser.add_argument("--amp", action="store_true", help="PPO gru only: fp16 autocast in the update (T2.0e, CUDA)")
     parser.add_argument("--deterministic", action="store_true", help="PPO only: act with the policy mean")
+    parser.add_argument("--rollout", type=int, default=64,
+                        help="PPO: steps per rollout; gru replays whole sequences of this length (T2.6b memory window)")
+    parser.add_argument("--instinct", type=float, default=0.0,
+                        help="inherited instinct strength alpha0 (T2.6a); 0 = off")
     parser.add_argument("--lr", type=float, default=3e-4,
                         help="PPO only: Adam learning rate for new runs (a resumed checkpoint keeps its optimizer state)")
     return parser.parse_args()
@@ -280,6 +284,7 @@ def main() -> None:
                     frozen=args.freeze,
                     deterministic_actions=args.deterministic,
                     slot_capacity=args.slot_capacity,
+                    rollout_horizon=args.rollout,
                 ),
                 ppo_config=PPOConfig(learning_rate=args.lr, amp=args.amp),
             )
@@ -290,6 +295,12 @@ def main() -> None:
             )
         else:
             policy = RandomPolicy(args.seed)
+        if args.instinct > 0:
+            from creature_brain.learning.instinct import InstinctConfig, InstinctPolicy, InstinctPool
+
+            save = args.checkpoint.with_name("instinct.npz") if args.checkpoint is not None else None
+            policy = InstinctPolicy(policy, InstinctPool(InstinctConfig(alpha0=args.instinct, seed=args.seed)), save)
+            LOGGER.info("instinct on: alpha0=%.2f (inherited per individual, T2.6a)", args.instinct)
         factories = []
         if args.episodes is not None:
             from creature_brain.benchmarks.recorder import EpisodeRecorder
