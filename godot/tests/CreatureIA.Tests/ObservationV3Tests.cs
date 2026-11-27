@@ -16,10 +16,10 @@ public sealed class ObservationV3Tests
             Assert.That(ObservationLayout.VisionLength, Is.EqualTo(1008));
             Assert.That(ObservationLayout.CreatureSectorOffset, Is.EqualTo(1008));
             Assert.That(ObservationLayout.OlfactionOffset, Is.EqualTo(1052));
-            Assert.That(ObservationLayout.InteroceptionOffset, Is.EqualTo(1077));
-            Assert.That(ObservationLayout.GenesOffset, Is.EqualTo(1097));
-            Assert.That(ObservationLayout.MotivationsOffset, Is.EqualTo(1121));
-            Assert.That(ObservationLayout.MotivationsOffset + ObservationLayout.MotivationsLength, Is.EqualTo(1130));
+            Assert.That(ObservationLayout.InteroceptionOffset, Is.EqualTo(1080));
+            Assert.That(ObservationLayout.GenesOffset, Is.EqualTo(1100));
+            Assert.That(ObservationLayout.MotivationsOffset, Is.EqualTo(1124));
+            Assert.That(ObservationLayout.MotivationsOffset + ObservationLayout.MotivationsLength, Is.EqualTo(1133));
             Assert.That(ObservationLayout.Total, Is.EqualTo(ProtocolConstants.ObservationDimensions));
             Assert.That(ObservationLayout.ActionCount, Is.EqualTo(ProtocolConstants.ActionDimensions));
         });

@@ -21,6 +21,11 @@ class RewardConfig:
     fatigue_setpoint: float = 0.15
     # Etapa 2: libido builds in fed adults and mating resets it, so the setpoint is satisfaction (0).
     libido_setpoint: float = 0.0
+    # Order of needs (v4 cascade): only relief of libido (mating) is rewarded, never its rise (a rising libido
+    # used to punish being fed), and only as much as hunger and thirst are settled: the relief is scaled by
+    # clip((min(energy, water) - need_floor) / need_span, 0, 1) before the step. Eating and drinking come first.
+    need_floor: float = 0.4
+    need_span: float = 0.3
     energy_weight: float = 1.0
     water_weight: float = 1.0
     temperature_weight: float = 0.08
@@ -92,9 +97,11 @@ class HomeostaticReward:
                 - abs(current_value - setpoint)
             )
             for previous_value, current_value, setpoint, weight in zip(
-                previous_drives, current_drives, setpoints, weights, strict=True
+                previous_drives[:5], current_drives[:5], setpoints[:5], weights[:5], strict=True
             )
         )
+        settled = min(max((min(previous_values[0], previous_values[1]) - config.need_floor) / config.need_span, 0.0), 1.0)
+        homeostatic += weights[5] * max(previous_drives[5] - current_drives[5], 0.0) * settled
         pain_penalty = config.pain_weight * max(current_values[7], 0.0)
         fear_penalty = config.fear_weight * min(max(current_values[11], 0.0), 1.0)
         death_penalty = config.death_penalty if died else 0.0
@@ -142,7 +149,10 @@ class HomeostaticReward:
             integrity = (values[:, 3] + values[:, 4] + values[:, 5]) / 3.0
             return np.stack((values[:, 0], values[:, 1], values[:, 2], integrity, values[:, 6], values[:, 8]), axis=1)
 
-        homeostatic = ((np.abs(drives(previous) - setpoints) - np.abs(drives(current) - setpoints)) * motivations[:, :6]).sum(axis=1)
+        before, after = drives(previous), drives(current)
+        homeostatic = ((np.abs(before[:, :5] - setpoints[:5]) - np.abs(after[:, :5] - setpoints[:5])) * motivations[:, :5]).sum(axis=1)
+        settled = np.clip((np.minimum(previous[:, 0], previous[:, 1]) - config.need_floor) / config.need_span, 0.0, 1.0)
+        homeostatic += motivations[:, 5] * np.maximum(before[:, 5] - after[:, 5], 0.0) * settled
         pain_penalty = motivations[:, 6] * np.maximum(current[:, 7], 0.0)
         fear_penalty = motivations[:, 7] * np.clip(current[:, 11], 0.0, 1.0)
         death_penalty = np.where(np.asarray(died, dtype=bool), config.death_penalty, 0.0)

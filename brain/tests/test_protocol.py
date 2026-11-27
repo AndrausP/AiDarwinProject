@@ -30,7 +30,7 @@ def test_should_round_trip_hello_when_frame_is_valid() -> None:
 
 
 def test_should_match_contract_fixture_when_encoding_hello_v3() -> None:
-    fixture = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "hello-v3.hex"
+    fixture = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "hello-v4.hex"
 
     encoded = encode_message(Hello(world_seed=0x0102030405060708))
 

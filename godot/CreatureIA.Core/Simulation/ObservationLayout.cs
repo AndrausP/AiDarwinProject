@@ -4,8 +4,8 @@ using CreatureIA.Core.Voxel;
 namespace CreatureIA.Core.Simulation;
 
 /// <summary>
-/// Observation v3 (Task 002 etapa 2, T2.3): 1130 floats. See contracts/protocol-v3.json and
-/// docs/tasks/008-proposta-protocolo-v3.md. Shared by the Sim and the Godot runtime.
+/// Observation v4 (Task 002 etapa 2, T2.3 + mating pheromone): 1133 floats. See contracts/protocol-v4.json and
+/// docs/tasks/008-proposta-protocolo-v3.md (v4 = v3 + 3 olfaction floats). Shared by the Sim and the Godot runtime.
 /// </summary>
 public static class ObservationLayout
 {
@@ -22,25 +22,26 @@ public static class ObservationLayout
     public const int CreatureSectorLength = 4 * SectorFeatures; // 36
     public const int AudioOffset = CreatureSectorOffset + CreatureSectorLength; // 1044
     public const int AudioLength = 8;
-    /// <summary>Scents (body, nose − body, right − body), log scale: plants, fresh water, salt water, creatures, threat.</summary>
+    /// <summary>Scents (body, nose − body, right − body), log scale: plants, fresh water, salt water, creatures, threat,
+    /// mating pheromone (v4: receptive females for males, fertile males for receptive females).</summary>
     public const int OlfactionOffset = AudioOffset + AudioLength; // 1052
-    public const int OlfactionLength = 15;
-    public const int SmellPlants = 0, SmellFreshWater = 3, SmellSaltWater = 6, SmellCreatures = 9, SmellThreat = 12;
-    public const int ProprioceptionOffset = OlfactionOffset + OlfactionLength; // 1067
+    public const int OlfactionLength = 18;
+    public const int SmellPlants = 0, SmellFreshWater = 3, SmellSaltWater = 6, SmellCreatures = 9, SmellThreat = 12, SmellMate = 15;
+    public const int ProprioceptionOffset = OlfactionOffset + OlfactionLength; // 1070
     public const int ProprioceptionLength = 10;
     /// <summary>The 12 of v2 (energy … fear, same order: the reward reads these) + gestation, offspring in need.</summary>
-    public const int InteroceptionOffset = ProprioceptionOffset + ProprioceptionLength; // 1077
+    public const int InteroceptionOffset = ProprioceptionOffset + ProprioceptionLength; // 1080
     public const int InteroceptionLength = 14;
     /// <summary>sin/cos time of day, photoperiod, photoperiod trend, light now, climate temperature offset (see WriteTime).</summary>
-    public const int TimeOffset = InteroceptionOffset + InteroceptionLength; // 1091
+    public const int TimeOffset = InteroceptionOffset + InteroceptionLength; // 1094
     public const int TimeLength = 6;
     /// <summary>Expressed body/life genes of <see cref="GeneCatalog.Basic"/> (all but the "m_" motivations), catalog order, each 0..1 by its range.</summary>
-    public const int GenesOffset = TimeOffset + TimeLength; // 1097 (24 genes -> motivations at 1121, total 1130)
+    public const int GenesOffset = TimeOffset + TimeLength; // 1100 (24 genes -> motivations at 1124, total 1133)
     public const int GenesLength = 24;
     /// <summary>The individual's reward weights (motivation genes, <see cref="GeneCatalog.MotivationOrder"/>), raw values.</summary>
-    public const int MotivationsOffset = GenesOffset + GenesLength; // 1121
+    public const int MotivationsOffset = GenesOffset + GenesLength; // 1124
     public const int MotivationsLength = 9;
-    public const int Total = MotivationsOffset + MotivationsLength; // 1130
+    public const int Total = MotivationsOffset + MotivationsLength; // 1133
     public const int ActionCount = 13;
 
 

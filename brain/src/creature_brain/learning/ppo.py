@@ -25,7 +25,16 @@ LOG_STD_MIN = -5.0
 # Lowered to -0.5 (std ~0.61) after night-v2/night-v3: the pre-tanh entropy bonus pushed every action's
 # log_std to the old cap 0 within ~3000 updates and the sampled policy drifted towards random.
 LOG_STD_MAX = -0.5
+# Start below the cap: clamp() has zero gradient outside [MIN, MAX], so a parameter that steps a hair
+# past the cap froze there for good (s2-a: every action at -0.498 for the whole run, policy ~random).
+LOG_STD_INIT = -1.0
 _ACTION_EPSILON = 1e-6
+
+
+def project_log_std(parameter: Tensor) -> None:
+    """Keep the learnable log_std inside its bounds after every optimizer step (gradient never dies)."""
+    with torch.no_grad():
+        parameter.clamp_(LOG_STD_MIN, LOG_STD_MAX)
 
 
 def seed_everything(seed: int, *, deterministic: bool = True) -> None:
@@ -56,7 +65,7 @@ class SharedActorCritic(nn.Module):
             nn.SiLU(),
         )
         self.actor_mean = nn.Linear(256, action_dim)
-        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -0.5))
+        self.actor_log_std = nn.Parameter(torch.full((action_dim,), LOG_STD_INIT))
         self.critic = nn.Linear(256, 1)
 
     @property
@@ -343,6 +352,7 @@ class PPOTrainer:
                     self.model.parameters(), config.max_gradient_norm
                 )
                 self.optimizer.step()
+                project_log_std(self.model.actor_log_std)
                 policy_losses.append(float(policy_loss.detach()))
                 value_losses.append(float(value_loss.detach()))
                 entropies.append(float(entropy_mean.detach()))
@@ -384,6 +394,7 @@ class PPOTrainer:
         )
         self.model.load_state_dict(checkpoint["model"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
+        project_log_std(self.model.actor_log_std)
         return int(checkpoint["step"]), dict(checkpoint.get("extra", {}))
 
 

@@ -367,6 +367,18 @@ public sealed class SimWorld
         return d <= width * 0.5f;
     }
 
+    /// <summary>
+    /// In heat (v4): a mature, fed, non-pregnant female in her breeding season. She is receptive and emits the
+    /// mating pheromone without acting; the male still has to choose to mate (physiology, not a behaviour script).
+    /// </summary>
+    internal bool IsReceptive(SimCreature female) =>
+        female.IsAlive && female.IsFemale && female.IsMature && !female.IsPregnant && InBreedingSeason(female)
+        && female.Physiology.Energy >= Mating.FertileEnergy;
+
+    /// <summary>A mature, fed male: the scent a receptive female smells.</summary>
+    private static bool IsFertileMale(SimCreature male) =>
+        male.IsAlive && !male.IsFemale && male.IsMature && male.Physiology.Energy >= Mating.FertileEnergy;
+
     private int PopulationIncludingUnborn() => _creatures.Count + _creatures.Where(c => c.IsPregnant).Sum(c => 1);
 
     private static MateCandidate Candidate(SimCreature c, bool wants) =>
@@ -381,7 +393,7 @@ public sealed class SimWorld
         if (PopulationIncludingUnborn() >= Settings.MaxPopulation) return;
         foreach (var female in _creatures)
         {
-            if (!female.IsFemale || !female.WantsToMate || female.IsPregnant || !female.IsMature || !InBreedingSeason(female)) continue;
+            if (!IsReceptive(female)) continue;
             SimCreature? best = null;
             var bestD2 = Mating.MaxDistanceMeters * Mating.MaxDistanceMeters;
             foreach (var male in _creatures)
@@ -848,6 +860,7 @@ public sealed class SimWorld
         Scent(observation, o + ObservationLayout.SmellSaltWater, gain, Terrain.SaltScent, body, nose, side);
         Scent(observation, o + ObservationLayout.SmellCreatures, gain, p => CreatureScent(p, listener, false), body, nose, side);
         Scent(observation, o + ObservationLayout.SmellThreat, gain, p => CreatureScent(p, listener, true), body, nose, side);
+        Scent(observation, o + ObservationLayout.SmellMate, gain, p => MateScent(p, listener), body, nose, side);
         var strongest = 0f;
         foreach (var other in _creatures)
         {
@@ -878,6 +891,40 @@ public sealed class SimWorld
         if (!threatOnly)
             foreach (var c in _carcasses) scent += 0.5f * c.Meat / MathF.Max(4f, Vector3.DistanceSquared(position, c.Position));
         return scent;
+    }
+
+    /// <summary>
+    /// Mating pheromone (v4): mature males smell receptive females, receptive females smell fertile males.
+    /// Carries farther than body scent (weight 4) so a mate can be tracked from beyond sight.
+    /// </summary>
+    private float MateScent(Vector3 position, SimCreature listener)
+    {
+        RefreshMateSources();
+        if (!listener.IsMature) return 0f;
+        if (listener.IsFemale && !_receptiveFemales.Contains(listener)) return 0f;
+        var sources = listener.IsFemale ? _fertileMales : _receptiveFemales;
+        var scent = 0f;
+        foreach (var other in sources)
+            scent += 4f / MathF.Max(4f, Vector3.DistanceSquared(position, other.Position));
+        return scent;
+    }
+
+    private readonly List<SimCreature> _receptiveFemales = new();
+    private readonly List<SimCreature> _fertileMales = new();
+    private long _mateSourcesTick = -1;
+
+    /// <summary>Who emits the pheromone, computed once per physics tick (gene lookups are not free).</summary>
+    private void RefreshMateSources()
+    {
+        if (_mateSourcesTick == PhysicsTick) return;
+        _mateSourcesTick = PhysicsTick;
+        _receptiveFemales.Clear();
+        _fertileMales.Clear();
+        foreach (var c in _creatures)
+        {
+            if (c.IsFemale) { if (IsReceptive(c)) _receptiveFemales.Add(c); }
+            else if (IsFertileMale(c)) _fertileMales.Add(c);
+        }
     }
 
     private static void WriteProprioception(Span<float> observation, SimCreature creature)

@@ -120,6 +120,49 @@ public sealed class PopulationTests
     }
 
     [Test]
+    public void Should_Conceive_When_OnlyTheMaleChoosesAndTheFemaleIsInHeat()
+    {
+        var world = EmptyWorld();
+        var spot = world.Terrain.RandomLandPoint(new SimRandom(3), 40f) + Vector3.UnitY * 0.05f;
+        var female = Adult(world, 1, Sex.Female, spot);
+        Adult(world, 2, Sex.Male, spot + new Vector3(0.8f, 0f, 0f));
+        Assume.That(world.IsReceptive(female), Is.True);
+        for (var tick = 0; tick < 200 && world.Population.Conceptions == 0; tick++)
+        {
+            foreach (var c in world.Creatures) c.SetAction(c.Id == 2 ? Action((8, 1f)) : Action());
+            world.StepBrainTick();
+        }
+
+        Assert.That(world.Population.Conceptions, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void Should_SmellMatingPheromone_When_ReceptiveFemaleIsNearAMatureMale()
+    {
+        var world = EmptyWorld(births: false);
+        var spot = world.Terrain.RandomLandPoint(new SimRandom(3), 40f) + Vector3.UnitY * 0.05f;
+        var female = Adult(world, 1, Sex.Female, spot);
+        var male = Adult(world, 2, Sex.Male, spot + new Vector3(6f, 0f, 0f));
+        var rival = Adult(world, 3, Sex.Male, spot + new Vector3(0f, 0f, 6f));
+        Assume.That(world.IsReceptive(female), Is.True);
+        float Pheromone(SimCreature c)
+        {
+            var obs = new float[ObservationLayout.Total];
+            world.Observe(c, obs);
+            return obs[ObservationLayout.OlfactionOffset + ObservationLayout.SmellMate];
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Pheromone(male), Is.GreaterThan(0f), "a mature male smells the receptive female");
+            Assert.That(Pheromone(female), Is.GreaterThan(0f), "a receptive female smells fertile males");
+        });
+        female.SetEnergyForTest(0.2);
+        world.StepPhysics(); // new tick: a hungry female is not in heat and emits nothing
+        Assert.That(Pheromone(rival), Is.Zero);
+    }
+
+    [Test]
     public void Should_RescueFromArchive_When_PopulationFallsBelowMinimum()
     {
         var world = EmptyWorld(minimum: 6);

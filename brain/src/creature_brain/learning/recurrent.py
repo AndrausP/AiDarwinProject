@@ -18,7 +18,14 @@ import torch
 from torch import Tensor, nn
 
 from creature_brain import ACTION_DIM, OBSERVATION_DIM
-from creature_brain.learning.ppo import LOG_STD_MAX, LOG_STD_MIN, PPOConfig, UpdateMetrics
+from creature_brain.learning.ppo import (
+    LOG_STD_INIT,
+    LOG_STD_MAX,
+    LOG_STD_MIN,
+    PPOConfig,
+    UpdateMetrics,
+    project_log_std,
+)
 
 
 class RecurrentActorCritic(nn.Module):
@@ -48,7 +55,7 @@ class RecurrentActorCritic(nn.Module):
         # Skip connection: reactive behaviour (see water → drink) does not have to pass through memory.
         self.head = nn.Sequential(nn.Linear(hidden_size + encoder_size, head_size), nn.SiLU())
         self.actor_mean = nn.Linear(head_size, action_dim)
-        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -0.5))
+        self.actor_log_std = nn.Parameter(torch.full((action_dim,), LOG_STD_INIT))
         self.critic = nn.Linear(head_size, 1)
 
     @property
@@ -291,6 +298,7 @@ class RecurrentPPOTrainer:
                 norm = nn.utils.clip_grad_norm_(self.model.parameters(), config.max_gradient_norm)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
+                project_log_std(self.model.actor_log_std)
                 policy_losses.append(float(policy_loss.detach()))
                 value_losses.append(float(value_loss.detach()))
                 entropies.append(float(entropy_mean.detach()))
@@ -327,6 +335,7 @@ class RecurrentPPOTrainer:
             raise ValueError(f"{path} is not a brain v3 (gru) checkpoint; use --brain mlp to resume it")
         self.model.load_state_dict(checkpoint["model"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
+        project_log_std(self.model.actor_log_std)
         if self.curiosity is not None and "curiosity" in checkpoint:
             self.curiosity.load_state_dict(checkpoint["curiosity"])
             assert self.curiosity_optimizer is not None

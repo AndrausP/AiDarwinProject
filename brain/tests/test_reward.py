@@ -145,3 +145,26 @@ def test_should_reward_mating_when_libido_drops_to_setpoint() -> None:
     after[0, 8] = 0.0  # mating satisfies libido
 
     assert reward.compute_totals(before, after, np.zeros(1, dtype=bool))[0] > 0.2
+
+def test_should_not_punish_rising_libido_when_creature_is_fed() -> None:
+    import numpy as np
+
+    reward = HomeostaticReward()
+    before = np.array([[0.8, 0.8, 37.0, 1, 1, 1, 0.15, 0.0, 0.3, 0.3, 1, 0.0]])
+    after = before.copy()
+    after[0, 8] = 0.4  # libido builds while fed
+
+    assert reward.compute_totals(before, after, np.zeros(1, dtype=bool))[0] == pytest.approx(0.0)
+
+
+def test_should_not_reward_mating_when_hungry_or_thirsty() -> None:
+    import numpy as np
+
+    reward = HomeostaticReward()
+    before = np.array([[0.35, 0.9, 37.0, 1, 1, 1, 0.15, 0.0, 0.9, 0.3, 1, 0.0]])
+    after = before.copy()
+    after[0, 8] = 0.0
+
+    assert reward.compute_totals(before, after, np.zeros(1, dtype=bool))[0] == pytest.approx(0.0)
+    scalar = reward.compute(tuple(before[0]), tuple(after[0])).total
+    assert scalar == pytest.approx(0.0)

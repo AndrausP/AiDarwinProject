@@ -23,7 +23,7 @@ from creature_brain import ACTION_DIM, INTEROCEPTION_OFFSET
 from creature_brain.bridge.protocol import EventType, Step
 
 REDUCED_START = 1008  # creature sectors .. end of the time block
-REDUCED_END = 1097
+REDUCED_END = 1100
 REDUCED_DIM = REDUCED_END - REDUCED_START  # 89
 AGE_FRACTION_INDEX = INTEROCEPTION_OFFSET + 9
 HIDDEN = 32

@@ -21,7 +21,7 @@ class _Zero:
 def _step(tick: int, ids: tuple[int, ...], age: float = 0.0, events: tuple[Event, ...] = ()) -> Step:
     obs = np.zeros((len(ids), OBSERVATION_DIM), dtype=np.float32)
     obs[:, AGE_FRACTION_INDEX] = age
-    obs[:, 1008:1097] = 0.5
+    obs[:, 1008:1100] = 0.5
     return Step(tick, ids, tuple(tuple(row) for row in obs), events)
 
 
