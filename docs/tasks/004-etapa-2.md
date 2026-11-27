@@ -25,7 +25,7 @@
 | T2.1c | Tempo: ano de 12 dias, estações por região, lagos rasos secam e voltam, plantas por região e estação, fotoperíodo | T2.1a | `WorldCycles` por região | testes analíticos de clima e seca |
 | T2.1d | Escala: chunks uniformes comprimidos, malha por distância no visualizador, população 150–250 | T2.1a | medições | budget: ≥ 2× tempo real por mundo com 200 criaturas no Sim |
 | **T2.2** | **Genoma e corpo** | | | |
-| T2.2a | Genética diploide: alelos valor + dominância, XY, crossover, mutação (taxa é gene, tende a recessiva), distância genética, viabilidade do filho | D2 | `CreatureIA.Core/Genetics` + testes (proporções mendelianas 3:1) | testes estatísticos passam |
+| T2.2a | Genética diploide: alelos valor + dominância, XY, crossover, mutação (taxa é gene, tende a recessiva), distância genética, viabilidade do filho | D2 | `CreatureIA.Core/Genetics` + testes (proporções mendelianas 3:1) | testes estatísticos passam · **✅ biblioteca 2026-11-27** (9 testes: 3:1 qui², sexo 1:1, ligação, mutação recessiva, taxa herdável; ainda não ligada ao Sim) |
 | T2.2b | Fenótipo → corpo modular: partes, genes adormecidos com limiar funcional, efeitos (velocidade, degrau, escalar, cavar, armadura, pelo), custo Kleiber, dimorfismo por sexo; visual voxel montado | T2.2a | `BodyPlan` + visual | testes de custo (nenhum traço grátis) |
 | T2.2c | Ciclo de vida: longevidade em anos, maturidade, ninhada, intervalo, gestação/gema, crescimento, senescência (Gompertz), estação reprodutiva, hibernação/torpor | T2.2a, T2.1c | genes + fisiologia | testes analíticos (curva de sobrevivência Gompertz) |
 | T2.2d | Acuidade dos sentidos por gene (alcance e ângulo da visão, visão noturna, olfato, audição), com custo | T2.2a, T2.0a | genes + Senses | testes |
