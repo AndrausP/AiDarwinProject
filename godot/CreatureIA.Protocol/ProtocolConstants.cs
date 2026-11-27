@@ -2,9 +2,9 @@ namespace CreatureIA.Protocol;
 
 public static class ProtocolConstants
 {
-    public const ushort Version = 2;
-    public const ushort ObservationDimensions = 1000;
-    public const ushort ActionDimensions = 12;
+    public const ushort Version = 3;
+    public const ushort ObservationDimensions = 1124;
+    public const ushort ActionDimensions = 13;
     public const int MaxBodyLength = 64 * 1024 * 1024;
 }
 

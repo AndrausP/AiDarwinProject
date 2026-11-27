@@ -17,8 +17,8 @@ from creature_brain.learning.ppo import (
 def test_should_match_parameter_budget_when_model_is_created() -> None:
     model = SharedActorCritic()
 
-    # Observation v2 (1000 inputs, 12 actions): same 512-256 trunk, wider first layer.
-    assert 630_000 <= model.trainable_parameter_count <= 670_000
+    # Observation v3 (1124 inputs, 13 actions): same 512-256 trunk, wider first layer.
+    assert 690_000 <= model.trainable_parameter_count <= 730_000
 
 
 def test_should_return_bounded_actions_when_policy_acts() -> None:

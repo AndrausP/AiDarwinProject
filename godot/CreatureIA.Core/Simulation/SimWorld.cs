@@ -108,7 +108,7 @@ public sealed class SimWorld
     }
 
     private const uint SnapshotMagic = 0x57414943; // "CIAW"
-    private const int SnapshotVersion = 1;
+    private const int SnapshotVersion = 2; // 2: protocol v3 (13 actions per creature)
 
     /// <summary>
     /// Complete world state (T2.0c): settings, edited blocks, clock, plants, creatures, sounds, pending
@@ -278,12 +278,13 @@ public sealed class SimWorld
         _sounds[sourceId] = new SoundPulse(sourceId, position, intensity, Math.Clamp(tone, -1f, 1f), PhysicsTick);
     }
 
-    /// <summary>Writes the 1000-float observation v2 of <paramref name="creature"/> and updates its perceived threat.</summary>
+    /// <summary>Writes the 1124-float observation v3 of <paramref name="creature"/> and updates its perceived threat.</summary>
     public void Observe(SimCreature creature, Span<float> observation)
     {
-        if (observation.Length != ObservationLayout.Total) throw new ArgumentException("observation must have 1000 floats");
+        if (observation.Length != ObservationLayout.Total) throw new ArgumentException($"observation must have {ObservationLayout.Total} floats");
         observation.Clear();
-        Span<float> sectorSums = stackalloc float[4 * 5];
+        const int sf = ObservationLayout.SectorFeatures;
+        Span<float> sectorSums = stackalloc float[4 * sf];
         Span<int> sectorHits = stackalloc int[4];
         var origin = creature.Position + Vector3.UnitY * SimCreature.EyeHeight;
         var range = VisionRange * Clock.VisionMultiplier;
@@ -345,11 +346,16 @@ public sealed class SimWorld
                 threat = MathF.Max(threat, FearModel.Perceived(threatness, bestDistance, range));
                 if (level != 1) continue;
                 var sector = ray * 4 / rays;
-                sectorSums[sector * 5] += seen.Color.R;
-                sectorSums[sector * 5 + 1] += seen.Color.G;
-                sectorSums[sector * 5 + 2] += seen.Color.B;
-                sectorSums[sector * 5 + 3] += seen.SizeScale / MathF.Max(1e-3f, creature.SizeScale);
-                sectorSums[sector * 5 + 4] += seen.IsCarnivore ? 1f : 0f;
+                var s = sector * sf;
+                sectorSums[s] += seen.Color.R;
+                sectorSums[s + 1] += seen.Color.G;
+                sectorSums[s + 2] += seen.Color.B;
+                sectorSums[s + 3] += seen.SizeScale / MathF.Max(1e-3f, creature.SizeScale);
+                sectorSums[s + 4] += seen.IsCarnivore ? 1f : 0f;
+                // s + 5 kin, s + 6 female: no genomes/sexes in the Sim yet (T2.4), stay 0.
+                var mature = seen.IsMature;
+                sectorSums[s + 7] += mature ? 1f : 0f;
+                sectorSums[s + 8] += mature ? 0f : 1f;
                 sectorHits[sector]++;
             }
         }
@@ -357,10 +363,10 @@ public sealed class SimWorld
         for (var sector = 0; sector < 4; sector++)
         {
             if (sectorHits[sector] == 0) continue;
-            for (var k = 0; k < 5; k++)
-                observation[ObservationLayout.CreatureSectorOffset + sector * 5 + k] = sectorSums[sector * 5 + k] / sectorHits[sector];
+            for (var k = 0; k < sf; k++)
+                observation[ObservationLayout.CreatureSectorOffset + sector * sf + k] = sectorSums[sector * sf + k] / sectorHits[sector];
             // Relative size is unbounded above; keep it in a sane range for the network.
-            var i = ObservationLayout.CreatureSectorOffset + sector * 5 + 3;
+            var i = ObservationLayout.CreatureSectorOffset + sector * sf + 3;
             observation[i] = Math.Clamp(observation[i], 0f, 4f);
         }
 
@@ -369,8 +375,8 @@ public sealed class SimWorld
         creature.LastThreat = threat;
         WriteProprioception(observation, creature);
         WriteInteroception(observation, creature);
-        observation[ObservationLayout.TimeOffset] = MathF.Sin(Clock.TimeOfDay01 * MathF.Tau);
-        observation[ObservationLayout.TimeOffset + 1] = MathF.Cos(Clock.TimeOfDay01 * MathF.Tau);
+        ObservationLayout.WriteTime(observation, Clock.TimeOfDay01, Clock.YearProgress01, Clock.LightFactor, Clock.TemperatureOffsetCelsius);
+        ObservationLayout.WriteDefaultGenesAndMotivations(observation);
     }
 
     private void CollectCreaturesNear(Vector3 point, float range, uint excludeId, List<SimCreature> output)
@@ -417,10 +423,11 @@ public sealed class SimWorld
         var nose = body + listener.Forward * 0.6f;
         var side = body + listener.Right * 0.6f;
         var o = ObservationLayout.OlfactionOffset;
-        WriteGradient(observation, o, Plants.Scent(body), Plants.Scent(nose), Plants.Scent(side));
-        WriteGradient(observation, o + 3, Terrain.WaterScent(body), Terrain.WaterScent(nose), Terrain.WaterScent(side));
-        WriteGradient(observation, o + 6, CreatureScent(body, listener, false), CreatureScent(nose, listener, false), CreatureScent(side, listener, false));
-        WriteGradient(observation, o + 9, CreatureScent(body, listener, true), CreatureScent(nose, listener, true), CreatureScent(side, listener, true));
+        ObservationLayout.WriteScent(observation, o + ObservationLayout.SmellPlants, Plants.Scent(body), Plants.Scent(nose), Plants.Scent(side));
+        ObservationLayout.WriteScent(observation, o + ObservationLayout.SmellFreshWater, Terrain.WaterScent(body), Terrain.WaterScent(nose), Terrain.WaterScent(side));
+        // o + SmellSaltWater: the stage-1 terrain has no sea; the island terrain fills it (T2.1 in the Sim).
+        ObservationLayout.WriteScent(observation, o + ObservationLayout.SmellCreatures, CreatureScent(body, listener, false), CreatureScent(nose, listener, false), CreatureScent(side, listener, false));
+        ObservationLayout.WriteScent(observation, o + ObservationLayout.SmellThreat, CreatureScent(body, listener, true), CreatureScent(nose, listener, true), CreatureScent(side, listener, true));
         var strongest = 0f;
         foreach (var other in _creatures)
         {
@@ -448,13 +455,6 @@ public sealed class SimWorld
             scent += weight / MathF.Max(4f, Vector3.DistanceSquared(position, other.Position));
         }
         return scent;
-    }
-
-    private static void WriteGradient(Span<float> observation, int offset, float body, float nose, float right)
-    {
-        observation[offset] = Math.Clamp(body, 0f, 1f);
-        observation[offset + 1] = Math.Clamp(nose - body, -1f, 1f);
-        observation[offset + 2] = Math.Clamp(right - body, -1f, 1f);
     }
 
     private static void WriteProprioception(Span<float> observation, SimCreature creature)
@@ -488,8 +488,9 @@ public sealed class SimWorld
         observation[i++] = (float)s.Pain;
         observation[i++] = (float)s.Libido;
         observation[i++] = Math.Clamp(age / creature.MaximumAgeSeconds, 0f, 1f);
-        observation[i++] = age >= creature.MaximumAgeSeconds * 0.2f ? 1f : 0f;
+        observation[i++] = creature.IsMature ? 1f : 0f;
         observation[i] = creature.Fear;
+        // v3: gestation and "offspring nearby in need" stay 0 until births exist (T2.4).
     }
 
     private static (float R, float G, float B) Hsv(float h, float s, float v)

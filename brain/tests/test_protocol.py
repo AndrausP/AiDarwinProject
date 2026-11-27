@@ -1,3 +1,4 @@
+from pathlib import Path
 import struct
 
 import pytest
@@ -26,6 +27,14 @@ def test_should_round_trip_hello_when_frame_is_valid() -> None:
     assert struct.unpack_from("<I", encoded)[0] == len(encoded) - 4
     assert encoded[4] == MessageType.HELLO
     assert decode_frame(encoded) == message
+
+
+def test_should_match_contract_fixture_when_encoding_hello_v3() -> None:
+    fixture = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "hello-v3.hex"
+
+    encoded = encode_message(Hello(world_seed=0x0102030405060708))
+
+    assert encoded == bytes.fromhex(fixture.read_text(encoding="utf-8").strip())
 
 
 def test_should_round_trip_config_when_values_are_finite() -> None:

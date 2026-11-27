@@ -142,8 +142,13 @@ public partial class CreatureBody : Node3D
 
     public void ApplyAction(ReadOnlySpan<float> action) => _latch.Set(action);
 
-    public float[] BuildObservation(float timeOfDay01, float visionMultiplier) =>
-        _senses.Observe(this, timeOfDay01, visionMultiplier);
+    public float[] BuildObservation(float timeOfDay01, float visionMultiplier)
+    {
+        var observation = _senses.Observe(this, timeOfDay01, visionMultiplier);
+        ObservationLayout.WriteTime(observation, timeOfDay01, _season?.YearProgress01 ?? 0.25f, _dayNight?.LightFactor ?? 1f,
+            (_dayNight?.TemperatureOffsetCelsius ?? 0f) + (_season?.TemperatureOffsetCelsius ?? 0f));
+        return observation;
+    }
 
     public void ApplyDamage(BodyZone zone, float amount, CoreDeathCause lethalCause, uint sourceId = 0)
     {

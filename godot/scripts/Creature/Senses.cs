@@ -1,3 +1,5 @@
+global using ObservationLayout = CreatureIA.Core.Simulation.ObservationLayout;
+global using VisionClass = CreatureIA.Core.Simulation.VisionClass;
 using CreatureIA.Core.Physiology;
 using CreatureIA.Core.Voxel;
 using Godot;
@@ -6,60 +8,7 @@ using CreatureIA.Godot.World;
 
 namespace CreatureIA.Godot.Creature;
 
-/// <summary>Observation v2 (Task 002 etapa 1): 1000 floats. See contracts/protocol-v2.json.</summary>
-public static class ObservationLayout
-{
-    public const int Rays = 72;
-    public const int FeaturesPerRay = 13;
-    public const int VisionOffset = 0;
-    public const int VisionLength = Rays * FeaturesPerRay; // 936
-    /// <summary>4 sectors × (r, g, b, relative size, carnivore) of creatures seen on the eye-level row.</summary>
-    public const int CreatureSectorOffset = 936;
-    public const int CreatureSectorLength = 20;
-    public const int AudioOffset = 956;
-    public const int AudioLength = 8;
-    /// <summary>Gradients (body, nose − body, right − body) of plants, water, creatures, threat.</summary>
-    public const int OlfactionOffset = 964;
-    public const int OlfactionLength = 12;
-    public const int ProprioceptionOffset = 976;
-    public const int ProprioceptionLength = 10;
-    public const int InteroceptionOffset = 986;
-    public const int InteroceptionLength = 12;
-    public const int TimeOffset = 998;
-    public const int TimeLength = 2;
-    public const int Total = 1000;
-}
-
-/// <summary>Per-ray class one-hot index (after the distance feature).</summary>
-public static class VisionClass
-{
-    public const int None = 0;
-    public const int Soil = 1;
-    public const int Sand = 2;
-    public const int Stone = 3;
-    public const int Snow = 4;
-    public const int Water = 5;
-    public const int Wood = 6;
-    public const int Leaves = 7;
-    public const int Plant = 8;
-    public const int Thorny = 9;
-    public const int Meat = 10;
-    public const int Creature = 11;
-    public const int Count = 12;
-
-    public static int OfBlock(BlockType block) => block switch
-    {
-        BlockType.Grass or BlockType.Dirt => Soil,
-        BlockType.Sand => Sand,
-        BlockType.Stone or BlockType.Bedrock or BlockType.Marble => Stone,
-        BlockType.Snow => Snow,
-        BlockType.Water or BlockType.SaltWater => Water,
-        BlockType.Wood or BlockType.BirchWood or BlockType.RedWood => Wood,
-        // Cactus reads as foliage: a green plant body (its own class would change the protocol).
-        BlockType.Leaves or BlockType.PineLeaves or BlockType.BirchLeaves or BlockType.AcaciaLeaves or BlockType.Cactus => Leaves,
-        _ => None
-    };
-}
+// Layout and vision classes: protocol v3 in CreatureIA.Core.Simulation (one source for the Sim and Godot).
 
 public partial class Senses : Node
 {
@@ -97,7 +46,8 @@ public partial class Senses : Node
     public float[] Observe(CreatureBody creature, float timeOfDay01, float visionMultiplier)
     {
         var observation = new float[ObservationLayout.Total];
-        Span<float> sectorSums = stackalloc float[4 * 5];
+        const int sf = ObservationLayout.SectorFeatures;
+        Span<float> sectorSums = stackalloc float[4 * sf];
         Span<int> sectorHits = stackalloc int[4];
         var origin = creature.GlobalPosition + Vector3.Up * EyeHeight;
         var basis = creature.GlobalTransform.Basis;
@@ -173,11 +123,15 @@ public partial class Senses : Node
                     if (level == 1)
                     {
                         var sector = ray * 4 / HorizontalRays;
-                        sectorSums[sector * 5] += seen.BodyColor.R;
-                        sectorSums[sector * 5 + 1] += seen.BodyColor.G;
-                        sectorSums[sector * 5 + 2] += seen.BodyColor.B;
-                        sectorSums[sector * 5 + 3] += seen.SizeScale / Mathf.Max(1e-3f, creature.SizeScale);
-                        sectorSums[sector * 5 + 4] += seen.IsCarnivore ? 1f : 0f;
+                        var s = sector * sf;
+                        sectorSums[s] += seen.BodyColor.R;
+                        sectorSums[s + 1] += seen.BodyColor.G;
+                        sectorSums[s + 2] += seen.BodyColor.B;
+                        sectorSums[s + 3] += seen.SizeScale / Mathf.Max(1e-3f, creature.SizeScale);
+                        sectorSums[s + 4] += seen.IsCarnivore ? 1f : 0f;
+                        // s + 5 kin, s + 6 female: genomes arrive with T2.4.
+                        sectorSums[s + 7] += seen.State.IsMature ? 1f : 0f;
+                        sectorSums[s + 8] += seen.State.IsMature ? 0f : 1f;
                         sectorHits[sector]++;
                     }
                 }
@@ -188,13 +142,13 @@ public partial class Senses : Node
         for (var sector = 0; sector < 4; sector++)
         {
             if (sectorHits[sector] == 0) continue;
-            for (var k = 0; k < 5; k++)
-                observation[ObservationLayout.CreatureSectorOffset + sector * 5 + k] = sectorSums[sector * 5 + k] / sectorHits[sector];
+            for (var k = 0; k < sf; k++)
+                observation[ObservationLayout.CreatureSectorOffset + sector * sf + k] = sectorSums[sector * sf + k] / sectorHits[sector];
         }
         // Relative size is unbounded above; keep it in a sane range for the network.
         for (var sector = 0; sector < 4; sector++)
         {
-            var i = ObservationLayout.CreatureSectorOffset + sector * 5 + 3;
+            var i = ObservationLayout.CreatureSectorOffset + sector * sf + 3;
             observation[i] = Mathf.Clamp(observation[i], 0f, 4f);
         }
 
@@ -205,8 +159,8 @@ public partial class Senses : Node
         LastThreat = threat;
         WriteProprioception(observation, creature);
         WriteInteroception(observation, creature);
-        observation[ObservationLayout.TimeOffset] = Mathf.Sin(timeOfDay01 * Mathf.Tau);
-        observation[ObservationLayout.TimeOffset + 1] = Mathf.Cos(timeOfDay01 * Mathf.Tau);
+        // Time block is written by CreatureBody, which owns the day and season clocks.
+        ObservationLayout.WriteDefaultGenesAndMotivations(observation);
         return observation;
     }
 

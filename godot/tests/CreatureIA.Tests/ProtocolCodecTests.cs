@@ -9,15 +9,15 @@ public sealed class ProtocolCodecTests
     [Test]
     public void Should_MatchGoldenFixture_When_EncodingHello()
     {
-        var expected = Convert.FromHexString("0f000000010200e8030c000807060504030201");
-        var actual = ProtocolCodec.Encode(new HelloMessage(2, 1000, 12, 0x0102030405060708));
+        var expected = Convert.FromHexString("0f00000001030064040d000807060504030201");
+        var actual = ProtocolCodec.Encode(new HelloMessage(3, 1124, 13, 0x0102030405060708));
         Assert.That(actual, Is.EqualTo(expected));
     }
 
     [Test]
     public void Should_RoundTripStep_When_PayloadIsValid()
     {
-        var observations = Enumerable.Range(0, 1000).Select(index => index / 1000f).ToArray();
+        var observations = Enumerable.Range(0, ProtocolConstants.ObservationDimensions).Select(index => index / 1000f).ToArray();
         var original = new StepMessage(42, new[] { new StepAgent(7, observations) }, new[] { new ProtocolEvent(EventType.Ate, new byte[] { 1, 2 }) });
         var decoded = (StepMessage)ProtocolCodec.Decode(ProtocolCodec.Encode(original));
         Assert.Multiple(() =>
@@ -32,7 +32,7 @@ public sealed class ProtocolCodecTests
     [Test]
     public void Should_RejectFrame_When_LengthPrefixDoesNotMatch()
     {
-        var frame = ProtocolCodec.Encode(new HelloMessage(2, 1000, 12, 1));
+        var frame = ProtocolCodec.Encode(new HelloMessage(3, 1124, 13, 1));
         frame[0]++;
         Assert.Throws<InvalidDataException>(() => ProtocolCodec.Decode(frame));
     }
@@ -49,7 +49,7 @@ public sealed class ProtocolCodecTests
     [Test]
     public void Should_RejectAct_When_TickDoesNotMatchStep()
     {
-        var step = new StepMessage(1, new[] { new StepAgent(9, new float[1000]) }, Array.Empty<ProtocolEvent>());
+        var step = new StepMessage(1, new[] { new StepAgent(9, new float[ProtocolConstants.ObservationDimensions]) }, Array.Empty<ProtocolEvent>());
         var act = new ActMessage(2, new[] { new ActAgent(9, new float[10]) });
         Assert.Throws<InvalidDataException>(() => ProtocolCodec.ValidateMatchingAct(step, act));
     }

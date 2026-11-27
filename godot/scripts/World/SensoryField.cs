@@ -1,4 +1,4 @@
-﻿using CreatureIA.Godot.Creature;
+using CreatureIA.Godot.Creature;
 using Godot;
 
 namespace CreatureIA.Godot.World;
@@ -79,7 +79,7 @@ public partial class SensoryField : Node
     /// <summary>Range at which a threatening creature can still be smelled, metres.</summary>
     public const float ThreatSmellRange = 15f;
 
-    /// <summary>Writes the four scent gradients; returns the strongest threat smelled (0..1), for fear.</summary>
+    /// <summary>Writes the scent gradients (protocol v3, log scale); returns the strongest threat smelled (0..1), for fear.</summary>
     public float WriteOlfaction(float[] observation, CreatureBody listener)
     {
         var basis = listener.GlobalTransform.Basis;
@@ -88,14 +88,14 @@ public partial class SensoryField : Node
         var body = listener.GlobalPosition;
         var nose = body + forward * 0.6f;
         var side = body + right * 0.6f;
-        WriteGradient(observation, ObservationLayout.OlfactionOffset, _plants.SampleScent(body),
+        WriteGradient(observation, ObservationLayout.OlfactionOffset + ObservationLayout.SmellPlants, _plants.SampleScent(body),
             _plants.SampleScent(nose), _plants.SampleScent(side));
-        WriteGradient(observation, ObservationLayout.OlfactionOffset + 3, _water.SampleScent(body),
+        WriteGradient(observation, ObservationLayout.OlfactionOffset + ObservationLayout.SmellFreshWater, _water.SampleScent(body),
             _water.SampleScent(nose), _water.SampleScent(side));
         RefreshCreatureSnapshot();
-        WriteGradient(observation, ObservationLayout.OlfactionOffset + 6, CreatureScent(body, listener.CreatureId),
+        WriteGradient(observation, ObservationLayout.OlfactionOffset + ObservationLayout.SmellCreatures, CreatureScent(body, listener.CreatureId),
             CreatureScent(nose, listener.CreatureId), CreatureScent(side, listener.CreatureId));
-        WriteGradient(observation, ObservationLayout.OlfactionOffset + 9, ThreatScent(body, listener),
+        WriteGradient(observation, ObservationLayout.OlfactionOffset + ObservationLayout.SmellThreat, ThreatScent(body, listener),
             ThreatScent(nose, listener), ThreatScent(side, listener));
         var strongest = 0f;
         foreach (var (id, position, other) in _liveCreatures)
@@ -161,10 +161,7 @@ public partial class SensoryField : Node
         return scent;
     }
 
-    private static void WriteGradient(float[] observation, int offset, float body, float nose, float right)
-    {
-        observation[offset] = Mathf.Clamp(body, 0f, 1f);
-        observation[offset + 1] = Mathf.Clamp(nose - body, -1f, 1f);
-        observation[offset + 2] = Mathf.Clamp(right - body, -1f, 1f);
-    }
+    // v3: log-scale scents shared with the Sim (salt-water scent stays 0 until the sea field exists in Godot).
+    private static void WriteGradient(float[] observation, int offset, float body, float nose, float right) =>
+        ObservationLayout.WriteScent(observation, offset, body, nose, right);
 }

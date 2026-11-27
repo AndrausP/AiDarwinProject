@@ -17,11 +17,11 @@ from typing import TextIO
 
 from creature_brain.bridge.protocol import EventType, Step
 
-INTEROCEPTION_OFFSET = 986  # observation v2
+from creature_brain import INTEROCEPTION_OFFSET, PROPRIOCEPTION_OFFSET  # observation v3
 ENERGY_INDEX = INTEROCEPTION_OFFSET
 WATER_INDEX = INTEROCEPTION_OFFSET + 1
 FATIGUE_INDEX = INTEROCEPTION_OFFSET + 6
-SLEEPING_INDEX = 976 + 6  # proprioception: sleeping flag
+SLEEPING_INDEX = PROPRIOCEPTION_OFFSET + 6  # proprioception: sleeping flag
 # "High fatigue" (T1.3): twice the reward's fatigue setpoint (0.15). Movement halves only above 0.8,
 # which a short-lived random walker never reaches, so 0.3 keeps the metric defined for the baseline.
 HIGH_FATIGUE_THRESHOLD = 0.3

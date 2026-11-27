@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from creature_brain import OBSERVATION_DIM
+from creature_brain import INTEROCEPTION_OFFSET, OBSERVATION_DIM
 from creature_brain.bridge.protocol import EventType, Step
 from creature_brain.learning.ppo import (
     PPOConfig,
@@ -41,8 +41,8 @@ from creature_brain.learning.reward import HomeostaticReward, RewardConfig
 
 LOGGER = logging.getLogger(__name__)
 
-INTEROCEPTION_START = 986  # observation v2
-INTEROCEPTION_END = 998
+INTEROCEPTION_START = INTEROCEPTION_OFFSET  # observation v3: first 12 = the v2 drives the reward reads
+INTEROCEPTION_END = INTEROCEPTION_OFFSET + 12
 
 
 @dataclass(frozen=True, slots=True)

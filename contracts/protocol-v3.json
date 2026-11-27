@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Criatura IA Protocol v3",
+  "version": 3,
+  "supersedes": "protocol-v2.json (Task 002 etapa 1). v3 = Task 002 etapa 2, T2.3 (docs/tasks/008-proposta-protocolo-v3.md). Brains trained on v2 are incompatible: retrain from zero.",
+  "endianness": "little",
+  "frame": {
+    "layout": ["u32 body_length", "u8 message_type", "bytes payload"],
+    "bodyLengthIncludes": ["message_type", "payload"],
+    "maxBodyLength": 67108864
+  },
+  "dimensions": { "observation": 1124, "action": 13 },
+  "observation": {
+    "vision": { "offset": 0, "length": 1008, "layout": "72 rays (3 pitch rows x 24 yaw) x 14: distance/range, one-hot [none, soil, sand, stone, snow, water, wood, leaves, plant, thorny, meat, creature, salt_water]" },
+    "creatureSectors": { "offset": 1008, "length": 36, "layout": "4 yaw sectors of the eye row x (r, g, b, relative size clamp 0..4, carnivore, kin, female, mature, juvenile), averaged over hits. kin/female are 0 until genomes (T2.4)" },
+    "audio": { "offset": 1044, "length": 8, "layout": "4 quadrants x (intensity, tone)" },
+    "olfaction": { "offset": 1052, "length": 15, "layout": "plants, fresh water, salt water, creatures, threat; each (body, nose-body, right-body). body = log1p(k*s)/log1p(k), k = 10000; differences = ln(1+k*s_nose) - ln(1+k*s_body), clamped -1..1" },
+    "proprioception": { "offset": 1067, "length": 10, "layout": "local velocity xyz /10, turn, on floor, head pitch, sleeping, in water, climbing, blocked" },
+    "interoception": { "offset": 1077, "length": 14, "layout": "energy, water, body temperature, head, torso, legs, fatigue, pain, libido, age fraction, mature, fear (same 12 as v2, read by the reward), gestation, offspring nearby in need (0 until T2.4)" },
+    "time": { "offset": 1091, "length": 6, "layout": "sin, cos of time of day; photoperiod 0..1 (long summer days = 1); photoperiod trend (sin of year, > 0 lengthening); light now 0..1; climate temperature offset / 20 C" },
+    "genes": { "offset": 1097, "length": 19, "layout": "expressed genes of GeneCatalog.Basic in catalog order, each (value - min) / (max - min). Default genome until genomes are wired (T2.4)" },
+    "motivations": { "offset": 1116, "length": 8, "layout": "individual reward weights: energy, water, temperature, integrity, fatigue, libido, pain, fear (default RewardConfig until motivations are genes)" }
+  },
+  "actions": ["thrust", "turn", "gait", "head_pitch", "jump", "eat", "drink", "sleep", "mate", "sound", "dig", "climb", "feed"],
+  "messageTypes": { "HELLO": 1, "CONFIG": 2, "STEP": 3, "ACT": 4, "SPAWN": 5 },
+  "eventTypes": { "DEATH": 1, "MATE_REQUEST": 2, "ATE": 3, "DAMAGED": 4 },
+  "deathCauses": {
+    "NONE": 0, "STARVATION": 1, "DEHYDRATION": 2, "COLD": 3, "HEAT": 4,
+    "HEAD_INJURY": 5, "TORSO_INJURY": 6, "AGE": 7, "FALL": 8, "BITE": 9
+  },
+  "flow": {
+    "lockstep": "The simulator sends STEP(tick) and pauses; Python answers with zero or more SPAWN frames followed by exactly one ACT(tick).",
+    "spawn": "SPAWN ids must be new (never reused). The spawned creature is created before physics resumes and first appears in STEP(tick+1). It is not part of ACT(tick).",
+    "traits": "trait_count 0 = default body.",
+    "pending": "BIRTH/MATED events and the 'feed' effect arrive with T2.4 without changing these dimensions."
+  },
+  "messages": {
+    "HELLO": ["u16 version", "u16 observation_dim", "u16 action_dim", "u64 world_seed"],
+    "CONFIG": ["f32 time_scale", "u16 physics_hz", "u16 brain_hz", "u16 population"],
+    "STEP": ["u64 tick", "u16 agent_count", "agent_count * (u32 id + 1124*f32 observation)", "u16 event_count", "event_count * (u8 type + u16 length + bytes payload)"],
+    "ACT": ["u64 tick", "u16 agent_count", "agent_count * (u32 id + 13*f32 action)"],
+    "SPAWN": ["u32 id", "u16 trait_count", "trait_count*f32 traits", "u8 has_position", "if has_position: 3*f32 position"]
+  },
+  "fixtures": { "hello": "fixtures/hello-v3.hex" }
+}

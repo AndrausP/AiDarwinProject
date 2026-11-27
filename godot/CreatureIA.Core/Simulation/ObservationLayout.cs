@@ -1,32 +1,100 @@
+using CreatureIA.Core.Genetics;
 using CreatureIA.Core.Voxel;
 
 namespace CreatureIA.Core.Simulation;
 
-/// <summary>Observation v2 (Task 002 etapa 1): 1000 floats. See contracts/protocol-v2.json.</summary>
+/// <summary>
+/// Observation v3 (Task 002 etapa 2, T2.3): 1124 floats. See contracts/protocol-v3.json and
+/// docs/tasks/008-proposta-protocolo-v3.md. Shared by the Sim and the Godot runtime.
+/// </summary>
 public static class ObservationLayout
 {
     public const int HorizontalRays = 24;
     public const int VerticalLevels = 3;
     public const int Rays = HorizontalRays * VerticalLevels;
-    public const int FeaturesPerRay = 13;
+    /// <summary>Distance + one-hot of <see cref="VisionClass.Count"/> classes.</summary>
+    public const int FeaturesPerRay = 1 + VisionClass.Count; // 14
     public const int VisionOffset = 0;
-    public const int VisionLength = Rays * FeaturesPerRay; // 936
-    /// <summary>4 sectors × (r, g, b, relative size, carnivore) of creatures seen on the eye-level row.</summary>
-    public const int CreatureSectorOffset = 936;
-    public const int CreatureSectorLength = 20;
-    public const int AudioOffset = 956;
+    public const int VisionLength = Rays * FeaturesPerRay; // 1008
+    /// <summary>4 sectors × (r, g, b, relative size, carnivore, kin, female, mature, juvenile), eye-level row.</summary>
+    public const int SectorFeatures = 9;
+    public const int CreatureSectorOffset = VisionOffset + VisionLength; // 1008
+    public const int CreatureSectorLength = 4 * SectorFeatures; // 36
+    public const int AudioOffset = CreatureSectorOffset + CreatureSectorLength; // 1044
     public const int AudioLength = 8;
-    /// <summary>Gradients (body, nose − body, right − body) of plants, water, creatures, threat.</summary>
-    public const int OlfactionOffset = 964;
-    public const int OlfactionLength = 12;
-    public const int ProprioceptionOffset = 976;
+    /// <summary>Scents (body, nose − body, right − body), log scale: plants, fresh water, salt water, creatures, threat.</summary>
+    public const int OlfactionOffset = AudioOffset + AudioLength; // 1052
+    public const int OlfactionLength = 15;
+    public const int SmellPlants = 0, SmellFreshWater = 3, SmellSaltWater = 6, SmellCreatures = 9, SmellThreat = 12;
+    public const int ProprioceptionOffset = OlfactionOffset + OlfactionLength; // 1067
     public const int ProprioceptionLength = 10;
-    public const int InteroceptionOffset = 986;
-    public const int InteroceptionLength = 12;
-    public const int TimeOffset = 998;
-    public const int TimeLength = 2;
-    public const int Total = 1000;
-    public const int ActionCount = 12;
+    /// <summary>The 12 of v2 (energy … fear, same order: the reward reads these) + gestation, offspring in need.</summary>
+    public const int InteroceptionOffset = ProprioceptionOffset + ProprioceptionLength; // 1077
+    public const int InteroceptionLength = 14;
+    /// <summary>sin/cos time of day, photoperiod, photoperiod trend, light now, climate temperature offset (see WriteTime).</summary>
+    public const int TimeOffset = InteroceptionOffset + InteroceptionLength; // 1091
+    public const int TimeLength = 6;
+    /// <summary>Expressed genes of <see cref="GeneCatalog.Basic"/>, each normalised 0..1 by its range.</summary>
+    public const int GenesOffset = TimeOffset + TimeLength; // 1097
+    public const int GenesLength = 19;
+    /// <summary>The individual's reward weights (energy, water, temperature, integrity, fatigue, libido, pain, fear).</summary>
+    public const int MotivationsOffset = GenesOffset + GenesLength; // 1116
+    public const int MotivationsLength = 8;
+    public const int Total = MotivationsOffset + MotivationsLength; // 1124
+    public const int ActionCount = 13;
+
+    /// <summary>Default reward weights (brain RewardConfig): what every individual has until motivations are genes.</summary>
+    public static ReadOnlySpan<float> DefaultMotivations => new[] { 1f, 1f, 0.08f, 1.25f, 0.35f, 0.05f, 0.5f, 0.3f };
+
+    /// <summary>
+    /// Scent intensity in log scale, 0..1: <c>log1p(k·s)/log1p(k)</c>. A linear <c>Σ 1/(1+d²)</c> is ~0.001 at 30 m
+    /// and its nose−body difference vanished in noise (stage-1 water probe); in log scale it survives distance.
+    /// </summary>
+    public const float ScentLogGain = 10_000f;
+    private static readonly float LogNorm = MathF.Log(1f + ScentLogGain);
+
+    public static float LogScent(float scent) => Math.Clamp(MathF.Log(1f + ScentLogGain * MathF.Max(0f, scent)) / LogNorm, 0f, 1f);
+
+    /// <summary>Writes (body, nose − body, right − body) in log scale; differences are scaled back to natural-log units.</summary>
+    public static void WriteScent(Span<float> observation, int offset, float body, float nose, float right)
+    {
+        var b = LogScent(body);
+        observation[offset] = b;
+        observation[offset + 1] = Math.Clamp((LogScent(nose) - b) * LogNorm, -1f, 1f);
+        observation[offset + 2] = Math.Clamp((LogScent(right) - b) * LogNorm, -1f, 1f);
+    }
+
+    /// <summary>
+    /// Time block: sin/cos of the time of day, photoperiod (0 short winter days … 1 long summer days), its trend
+    /// (&gt; 0 days lengthening), light level now (0..1) and the climate's temperature offset /20 °C.
+    /// <paramref name="year01"/> follows <see cref="SimClock.YearProgress01"/> (0 = mid-winter).
+    /// </summary>
+    public static void WriteTime(Span<float> observation, float timeOfDay01, float year01, float light01, float temperatureOffsetCelsius)
+    {
+        var i = TimeOffset;
+        observation[i] = MathF.Sin(timeOfDay01 * MathF.Tau);
+        observation[i + 1] = MathF.Cos(timeOfDay01 * MathF.Tau);
+        observation[i + 2] = (1f - MathF.Cos(year01 * MathF.Tau)) * 0.5f;
+        observation[i + 3] = MathF.Sin(year01 * MathF.Tau);
+        observation[i + 4] = Math.Clamp(light01, 0f, 1f);
+        observation[i + 5] = Math.Clamp(temperatureOffsetCelsius / 20f, -1f, 1f);
+    }
+
+    private static readonly float[] DefaultGenesNormalised = BuildDefaultGenes();
+
+    private static float[] BuildDefaultGenes()
+    {
+        var catalog = GeneCatalog.Basic();
+        if (catalog.Count != GenesLength) throw new InvalidOperationException($"protocol v3 carries {GenesLength} genes, catalog has {catalog.Count}");
+        return catalog.Genes.Select(g => (g.Default - g.Min) / g.Range).ToArray();
+    }
+
+    /// <summary>Genes and motivations until genomes are wired to creatures (T2.4): default genome, default weights.</summary>
+    public static void WriteDefaultGenesAndMotivations(Span<float> observation)
+    {
+        DefaultGenesNormalised.CopyTo(observation.Slice(GenesOffset, GenesLength));
+        DefaultMotivations.CopyTo(observation.Slice(MotivationsOffset, MotivationsLength));
+    }
 }
 
 /// <summary>Per-ray class one-hot index (after the distance feature).</summary>
@@ -44,7 +112,9 @@ public static class VisionClass
     public const int Thorny = 9;
     public const int Meat = 10;
     public const int Creature = 11;
-    public const int Count = 12;
+    /// <summary>v3: the sea is visible as itself (it does not quench thirst).</summary>
+    public const int SaltWater = 12;
+    public const int Count = 13;
 
     public static int OfBlock(BlockType block) => block switch
     {
@@ -52,10 +122,10 @@ public static class VisionClass
         BlockType.Sand => Sand,
         BlockType.Stone or BlockType.Bedrock or BlockType.Marble => Stone,
         BlockType.Snow => Snow,
-        // Sea looks like water (protocol v2 has one water class): telling it apart is learned by tasting it.
-        BlockType.Water or BlockType.SaltWater => Water,
+        BlockType.Water => Water,
+        BlockType.SaltWater => SaltWater,
         BlockType.Wood or BlockType.BirchWood or BlockType.RedWood => Wood,
-        // Cactus reads as foliage: a green plant body (its own class would change the protocol).
+        // Cactus reads as foliage: a green plant body.
         BlockType.Leaves or BlockType.PineLeaves or BlockType.BirchLeaves or BlockType.AcaciaLeaves or BlockType.Cactus => Leaves,
         _ => None
     };

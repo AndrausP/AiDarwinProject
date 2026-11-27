@@ -22,7 +22,7 @@ from creature_brain.learning.ppo import LOG_STD_MAX, LOG_STD_MIN, PPOConfig, Upd
 
 
 class RecurrentActorCritic(nn.Module):
-    """~4.0M parameters: encoder 1000→768→768, GRU 512 (memory), head over [memory, encoder]."""
+    """~4.0M parameters: encoder 1124→768→768, GRU 512 (memory), head over [memory, encoder]."""
 
     def __init__(
         self,

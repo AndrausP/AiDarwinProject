@@ -46,6 +46,8 @@ public sealed class SimCreature
     public bool IsAlive => Physiology.IsAlive;
     public bool Sleeping => Physiology.IsSleeping;
     public float MaximumAgeSeconds { get; private set; } = 3600f;
+    /// <summary>Adult once past 20 % of the maximum age (same rule as the interoception flag of v2).</summary>
+    public bool IsMature => Physiology.AgeSeconds >= MaximumAgeSeconds * 0.2f;
     /// <summary>Strongest threat perceived at the last observation (feeds fear).</summary>
     public float LastThreat { get; internal set; }
     public ReadOnlySpan<float> Action => _action;

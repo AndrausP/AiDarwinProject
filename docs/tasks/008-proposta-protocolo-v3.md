@@ -1,6 +1,6 @@
 # Proposta — Protocolo v3 (T2.3) · para aprovação do usuário
 
-Escrita na noite de 2026-11-27 pelo agente. **Nada foi implementado no protocolo**: mudar o layout de observação/ações
+Escrita na noite de 2026-11-27 pelo agente. **Aprovada pelo usuário na manhã de 2026-11-27 (P1–P5 como recomendado); implementada** em `contracts/protocol-v3.json` (bloco de tempo: luz atual e oferta térmica no lugar de sen/cos do ano, que repetiam o fotoperíodo). Texto original: mudar o layout de observação/ações
 é nova versão de protocolo e retreino do zero (regra do projeto). Este documento junta o que a etapa 2 precisa e o que
 a noite mostrou sobre o gargalo da etapa 1.
 

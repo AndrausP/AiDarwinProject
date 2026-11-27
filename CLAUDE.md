@@ -31,8 +31,8 @@ Roteiro com dependências: `docs/ROADMAP.md`. Plano detalhado: `docs/tasks/002-v
   os genes expressos e se adapta ao próprio corpo. Mesmo vetor de ações para todos os corpos.
 
 ### Cérebro
-- v3 (`--brain gru`, padrão): ~4,0 M parâmetros — encoder 1000→768→768, **GRU 512 (memória)**, head com atalho
-  reativo, ator 12 / crítico 1. Curiosidade RND existe mas fica **desligada** (T1.1: distraía e fazia cavar). PPO recorrente (replay de 64 passos, reset no nascimento).
+- v3 (`--brain gru`, padrão): ~4,0 M parâmetros — encoder 1124→768→768, **GRU 512 (memória)**, head com atalho
+  reativo, ator 13 / crítico 1. Curiosidade RND existe mas fica **desligada** (T1.1: distraía e fazia cavar). PPO recorrente (replay de 64 passos, reset no nascimento).
 - v2 (`--brain mlp`): 0,65 M, sem memória. Mantido só para comparação e para retomar runs antigos (`v2-ppo-a`).
 - Etapa 2 adiciona camada de **instinto** por indivíduo (herdada com mutação) e genes como entrada.
 - **Meta do projeto: cérebro v4 ~30 M parâmetros** (codificador por sentido, atenção social, GRU 2×1024,
