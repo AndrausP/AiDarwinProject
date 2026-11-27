@@ -395,9 +395,12 @@ class RunningMeanStd:
         batch = np.asarray(batch, dtype=np.float64)
         if batch.size == 0:
             return
-        batch_mean = batch.mean(axis=0)
-        batch_var = batch.var(axis=0)
-        batch_count = batch.shape[0]
+        self.update_from_moments(batch.mean(axis=0), batch.var(axis=0), batch.shape[0])
+
+    def update_from_moments(self, batch_mean: np.ndarray, batch_var: np.ndarray, batch_count: int) -> None:
+        """Merge a batch summarised by its mean and (population) variance, e.g. computed on the GPU."""
+        batch_mean = np.asarray(batch_mean, dtype=np.float64)
+        batch_var = np.asarray(batch_var, dtype=np.float64)
         delta = batch_mean - self.mean
         total = self.count + batch_count
         self.mean = self.mean + delta * batch_count / total

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import math
 from typing import Sequence
 
+import numpy as np
+
 
 INTEROCEPTION_DIM = 12
 
@@ -94,6 +96,31 @@ class HomeostaticReward:
         death_penalty = config.death_penalty if died else 0.0
         total = homeostatic - pain_penalty - fear_penalty - death_penalty
         return RewardResult(total, homeostatic, pain_penalty, fear_penalty, death_penalty)
+
+    def compute_totals(self, previous: np.ndarray, current: np.ndarray, died: np.ndarray) -> np.ndarray:
+        """Vectorised ``compute(...).total`` for N creatures: (N, 12) arrays and an (N,) bool mask.
+        Same formula as :meth:`compute`; per-creature Python was ~20 ms per tick at 288 creatures."""
+        previous = np.asarray(previous, dtype=np.float64)
+        current = np.asarray(current, dtype=np.float64)
+        if previous.ndim != 2 or previous.shape[1] != INTEROCEPTION_DIM or previous.shape != current.shape:
+            raise ValueError(f"interoception must be (N, {INTEROCEPTION_DIM}) arrays of equal shape")
+        if not (np.isfinite(previous).all() and np.isfinite(current).all()):
+            raise ValueError("interoception contains non-finite values")
+        config = self.config
+        setpoints = np.array([config.energy_setpoint, config.water_setpoint, config.temperature_setpoint,
+                              config.integrity_setpoint, config.fatigue_setpoint, config.libido_setpoint])
+        weights = np.array([config.energy_weight, config.water_weight, config.temperature_weight,
+                            config.integrity_weight, config.fatigue_weight, config.libido_weight])
+
+        def drives(values: np.ndarray) -> np.ndarray:
+            integrity = (values[:, 3] + values[:, 4] + values[:, 5]) / 3.0
+            return np.stack((values[:, 0], values[:, 1], values[:, 2], integrity, values[:, 6], values[:, 8]), axis=1)
+
+        homeostatic = ((np.abs(drives(previous) - setpoints) - np.abs(drives(current) - setpoints)) * weights).sum(axis=1)
+        pain_penalty = config.pain_weight * np.maximum(current[:, 7], 0.0)
+        fear_penalty = config.fear_weight * np.clip(current[:, 11], 0.0, 1.0)
+        death_penalty = np.where(np.asarray(died, dtype=bool), config.death_penalty, 0.0)
+        return homeostatic - pain_penalty - fear_penalty - death_penalty
 
     @staticmethod
     def _drives(values: tuple[float, ...]) -> tuple[float, ...]:

@@ -166,12 +166,9 @@ class OnlinePPOPolicy:
         array = step.observation_array
         if array is None:
             array = np.asarray(step.observations, dtype=np.float32).reshape(-1, OBSERVATION_DIM)
-        current_interoception = {
-            creature_id: tuple(row)
-            for creature_id, row in zip(
-                step.creature_ids, array[:, INTEROCEPTION_START:INTEROCEPTION_END].tolist()
-            )
-        }
+        # Rows of one float64 copy (not views of the decoded frame, which is reused per tick).
+        interoception_rows = np.array(array[:, INTEROCEPTION_START:INTEROCEPTION_END], dtype=np.float64)
+        current_interoception = dict(zip(step.creature_ids, interoception_rows))
         row_of = {creature_id: row for row, creature_id in enumerate(step.creature_ids)}
         observations = self._observation_tensor(array)
 
@@ -332,25 +329,24 @@ class OnlinePPOPolicy:
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """Rewards/terminals per slot plus a mask of slots whose creature survives (and so
         keeps its slot, making the next tick's value its bootstrap)."""
-        rewards: list[float] = []
-        terminals: list[bool] = []
-        valid: list[bool] = []
-        continuing: list[float] = []
-        for creature_id in pending.slot_ids:
-            if creature_id is None:
-                # Padding row for an empty slot: terminal so it cuts GAE, dropped from the batch.
-                rewards.append(0.0)
-                terminals.append(True)
-                valid.append(False)
-                continuing.append(0.0)
-                continue
-            previous = pending.interoception[creature_id]
-            died = creature_id in death_ids or creature_id not in row_of
-            current = current_interoception.get(creature_id, previous)
-            rewards.append(self.reward.compute(previous, current, died=died).total)
-            terminals.append(died)
-            valid.append(True)
-            continuing.append(0.0 if died else 1.0)
+        count = len(pending.slot_ids)
+        rewards = np.zeros(count, dtype=np.float64)
+        # Padding rows for empty slots: terminal so they cut GAE, dropped from the batch.
+        terminals = np.ones(count, dtype=bool)
+        valid = np.zeros(count, dtype=bool)
+        occupied = [slot for slot, creature_id in enumerate(pending.slot_ids) if creature_id is not None]
+        if occupied:
+            previous = np.stack([pending.interoception[pending.slot_ids[slot]] for slot in occupied])
+            current = np.stack([
+                current_interoception.get(pending.slot_ids[slot], previous[i]) for i, slot in enumerate(occupied)
+            ])
+            died = np.array([
+                pending.slot_ids[slot] in death_ids or pending.slot_ids[slot] not in row_of for slot in occupied
+            ], dtype=bool)
+            rewards[occupied] = self.reward.compute_totals(previous, current, died)
+            terminals[occupied] = died
+            valid[occupied] = True
+        continuing = (valid & ~terminals).astype(np.float32)
         return (
             torch.tensor(rewards, dtype=torch.float32, device=self.device),
             torch.tensor(terminals, dtype=torch.bool, device=self.device),
@@ -424,11 +420,15 @@ class OnlinePPOPolicy:
             return torch.empty((0, OBSERVATION_DIM), dtype=torch.float32, device=self.device)
         if array.ndim != 2 or array.shape[1] != OBSERVATION_DIM:
             raise ValueError("invalid protocol observation layout")
-        self.observation_rms.update(array)
-        normalized = np.clip(
-            (array - self.observation_rms.mean) / np.sqrt(self.observation_rms.var + 1e-8), -10.0, 10.0
+        # Same float64 statistics and normalisation as before, computed on the device (T2.0e):
+        # the numpy version cost ~11 ms per tick at 288 creatures.
+        raw = torch.from_numpy(np.require(array, dtype=np.float32, requirements=("C", "W"))).to(self.device, torch.float64)
+        self.observation_rms.update_from_moments(
+            raw.mean(dim=0).cpu().numpy(), raw.var(dim=0, unbiased=False).cpu().numpy(), raw.shape[0]
         )
-        return torch.as_tensor(normalized, dtype=torch.float32, device=self.device)
+        mean = torch.as_tensor(self.observation_rms.mean, device=self.device)
+        std = torch.as_tensor(np.sqrt(self.observation_rms.var + 1e-8), device=self.device)
+        return ((raw - mean) / std).clamp(-10.0, 10.0).to(torch.float32)
 
     @staticmethod
     def _interoception(

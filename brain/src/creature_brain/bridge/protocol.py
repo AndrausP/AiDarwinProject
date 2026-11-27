@@ -8,6 +8,7 @@ and non-finite payloads so a corrupt frame cannot silently reach the simulator.
 
 from __future__ import annotations
 
+import collections.abc as _abc
 from dataclasses import dataclass, field
 from enum import IntEnum
 import math
@@ -17,6 +18,44 @@ from typing import Iterable, Sequence, TypeAlias
 import numpy as np
 
 from creature_brain import ACTION_DIM, OBSERVATION_DIM, PROTOCOL_VERSION
+
+
+class ObservationRows(_abc.Sequence):
+    """Read-only sequence of observation rows backed by a decoded float32 (N, D) array.
+
+    Behaves like the tuple of tuples it replaces (len, iteration, indexing, equality with tuples)
+    without materialising N x D Python floats; each row is a numpy view."""
+
+    __slots__ = ("_array",)
+
+    def __init__(self, array: np.ndarray) -> None:
+        self._array = array
+
+    def __len__(self) -> int:
+        return self._array.shape[0]
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return ObservationRows(self._array[index])
+        return self._array[index]
+
+    def __iter__(self):
+        return iter(self._array)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, ObservationRows):
+            return np.array_equal(self._array, other._array)
+        if isinstance(other, (tuple, list)):
+            return len(other) == len(self) and all(
+                len(row) == self._array.shape[1] and tuple(map(float, row)) == tuple(self._array[i].tolist())
+                for i, row in enumerate(other)
+            )
+        return NotImplemented
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __repr__(self) -> str:
+        return f"ObservationRows(shape={self._array.shape})"
 
 
 MAX_FRAME_SIZE = 64 * 1024 * 1024
@@ -245,7 +284,8 @@ def _decode_step(view: memoryview) -> Step:
     if not np.isfinite(array).all():
         raise ProtocolError("observation contains non-finite values")
     ids = agents["id"].tolist()
-    observations = tuple(map(tuple, array.tolist()))
+    # Lazy rows: converting 288 x 1000 floats to Python tuples cost ~10 ms per tick (T2.0e).
+    observations = ObservationRows(array)
     (event_count,) = cursor.unpack("<H")
     events: list[Event] = []
     for _ in range(event_count):

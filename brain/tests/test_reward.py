@@ -75,3 +75,21 @@ def test_should_penalize_fear_when_feeling_is_high() -> None:
     assert calm.fear_penalty == 0.0
     assert afraid.fear_penalty == pytest.approx(0.15)
     assert afraid.total == pytest.approx(-0.15)
+
+def test_should_match_per_creature_reward_when_computed_in_batch() -> None:
+    import numpy as np
+
+    from creature_brain.learning.reward import HomeostaticReward
+
+    rng = np.random.default_rng(3)
+    previous = rng.uniform(0.0, 1.0, size=(50, 12))
+    current = rng.uniform(0.0, 1.0, size=(50, 12))
+    previous[:, 2] = rng.uniform(30.0, 40.0, size=50)
+    current[:, 2] = rng.uniform(30.0, 40.0, size=50)
+    died = rng.uniform(size=50) < 0.2
+    reward = HomeostaticReward()
+
+    totals = reward.compute_totals(previous, current, died)
+
+    expected = [reward.compute(tuple(p), tuple(c), died=bool(d)).total for p, c, d in zip(previous, current, died)]
+    assert np.allclose(totals, expected, atol=1e-12)

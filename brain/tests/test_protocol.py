@@ -84,3 +84,17 @@ def test_should_reject_observation_when_value_is_not_finite() -> None:
     with pytest.raises(ProtocolError, match="non-finite"):
         encode_message(Step(1, (1,), (tuple(observation),)))
 
+
+
+def test_should_behave_like_tuples_when_decoded_observations_are_lazy_rows() -> None:
+    from creature_brain import OBSERVATION_DIM
+    from creature_brain.bridge.protocol import ObservationRows, Step, decode_frame, encode_message
+
+    rows = (tuple([0.5] * OBSERVATION_DIM), tuple([0.25] * OBSERVATION_DIM))
+    decoded = decode_frame(encode_message(Step(7, (1, 2), rows)))
+
+    assert isinstance(decoded.observations, ObservationRows)
+    assert decoded.observations == rows
+    assert len(decoded.observations) == 2
+    assert float(decoded.observations[1][3]) == 0.25
+    assert decoded == Step(7, (1, 2), rows)
