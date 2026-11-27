@@ -9,6 +9,29 @@ public enum SimEventKind : byte { Death = 1, Ate = 3, Damaged = 4 }
 /// <summary>World event for the brain (protocol v2 DEATH / ATE / DAMAGED).</summary>
 public readonly record struct SimEvent(SimEventKind Kind, uint CreatureId, byte Code, float Quantity, uint SourceId);
 
+/// <summary>
+/// Exploit watch (T1.7): creature-ticks spent standing on foliage, buried (solid block right above
+/// the head) and hugging the map edge. Reported with every evaluation; a large share is a bug to fix.
+/// </summary>
+public sealed class ExploitCounters
+{
+    public const float BorderMarginMeters = 2f;
+    public long CreatureTicks;
+    public long OnLeaves;
+    public long Buried;
+    public long AtBorder;
+
+    public void Add(ExploitCounters other)
+    {
+        CreatureTicks += other.CreatureTicks;
+        OnLeaves += other.OnLeaves;
+        Buried += other.Buried;
+        AtBorder += other.AtBorder;
+    }
+
+    public double Share(long count) => CreatureTicks == 0 ? 0 : (double)count / CreatureTicks;
+}
+
 public sealed record SimWorldSettings
 {
     public int Seed { get; init; } = 1337;
@@ -17,6 +40,11 @@ public sealed record SimWorldSettings
     public int Lakes { get; init; } = 6;
     /// <summary>Half-size of the square where creatures are born.</summary>
     public float SpawnExtentMeters { get; init; } = 120f;
+    /// <summary>
+    /// Varies plants and spawns without changing the terrain: replicas of one reserved evaluation
+    /// seed (seed 0) use salts 0, 1, 2… Salt 0 is the plain world of <see cref="Seed"/>.
+    /// </summary>
+    public int Salt { get; init; }
 }
 
 /// <summary>
@@ -58,8 +86,8 @@ public sealed class SimWorld
     {
         Settings = settings;
         Terrain = new SimTerrain(VoxelWorldGenerator.Generate(settings.Seed, new VoxelWorldSettings { LakeCount = settings.Lakes }));
-        Plants = new PlantField(Terrain, settings.Seed, settings.Plants);
-        _spawnRng = new SimRandom((ulong)settings.Seed, stream: 7);
+        Plants = new PlantField(Terrain, settings.Seed + settings.Salt * 1_000_003, settings.Plants);
+        _spawnRng = new SimRandom((ulong)(settings.Seed + settings.Salt * 1_000_003), stream: 7);
         foreach (var id in initialIds ?? Enumerable.Range(1, settings.Population).Select(i => (uint)i)) Spawn(id, null);
     }
 
@@ -87,11 +115,28 @@ public sealed class SimWorld
         Plants.Step(dt, Clock.LightFactor, Clock.GrowthMultiplier);
         foreach (var creature in _creatures) creature.Step(this, dt);
         _creatures.RemoveAll(creature => !creature.IsAlive);
+        WatchExploits();
         PhysicsTick++;
         _expired.Clear();
         foreach (var (sourceId, sound) in _sounds)
             if (PhysicsTick - sound.CreatedTick >= SoundLifetimeTicks) _expired.Add(sourceId);
         foreach (var sourceId in _expired) _sounds.Remove(sourceId);
+    }
+
+    public ExploitCounters Exploits { get; } = new();
+
+    private void WatchExploits()
+    {
+        var grid = Terrain.Grid;
+        var edge = Terrain.MapSize / 2f - ExploitCounters.BorderMarginMeters;
+        foreach (var creature in _creatures)
+        {
+            var p = creature.Position;
+            Exploits.CreatureTicks++;
+            if (BlockTypes.IsFoliage(grid.GetAtWorld(p.X, p.Y - 0.1f, p.Z))) Exploits.OnLeaves++;
+            if (BlockTypes.IsSolid(grid.GetAtWorld(p.X, p.Y + SimCreature.Shape.Height + 0.1f, p.Z))) Exploits.Buried++;
+            if (MathF.Abs(p.X) > edge || MathF.Abs(p.Z) > edge) Exploits.AtBorder++;
+        }
     }
 
     /// <summary>Events since the last call, in the order they happened.</summary>

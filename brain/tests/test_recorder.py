@@ -52,6 +52,28 @@ def test_should_write_lifetime_and_cause_when_death_event_arrives() -> None:
     EpisodeRecord.from_mapping(line)  # schema accepted by the benchmark
 
 
+def test_should_count_sleep_only_when_previous_tick_was_tired() -> None:
+    from creature_brain.benchmarks.recorder import FATIGUE_INDEX, SLEEPING_INDEX
+
+    def obs(fatigue: float, sleeping: bool) -> tuple[float, ...]:
+        values = list(_obs(0.9, 0.9))
+        values[FATIGUE_INDEX] = fatigue
+        values[SLEEPING_INDEX] = 1.0 if sleeping else 0.0
+        return tuple(values)
+
+    sink = io.StringIO()
+    recorder = _recorder(sink)
+    sequence = [obs(0.1, True), obs(0.5, False), obs(0.5, True), obs(0.4, True), obs(0.1, False), obs(0.1, True)]
+    for tick, observation in enumerate(sequence):
+        recorder(Step(tick, (1,), (observation,)))
+    recorder.close()
+
+    [line] = _lines(sink)
+    # tired at ticks 1, 2, 3 -> opportunities at ticks 2, 3, 4; asleep at 2 and 3.
+    assert line["high_fatigue_steps"] == 3
+    assert line["slept_while_tired"] == 2
+
+
 def test_should_credit_eating_only_when_previous_tick_was_in_deficit() -> None:
     sink = io.StringIO()
     recorder = _recorder(sink)

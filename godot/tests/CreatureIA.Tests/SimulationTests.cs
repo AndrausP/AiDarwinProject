@@ -181,6 +181,35 @@ public sealed class SimulationTests
     }
 
     [Test]
+    public void Should_KeepTerrainButMovePlants_When_SaltDiffers()
+    {
+        var plain = new SimWorld(new SimWorldSettings { Seed = 0, Population = 4, Plants = 200 });
+        var replica = new SimWorld(new SimWorldSettings { Seed = 0, Population = 4, Plants = 200, Salt = 1 });
+
+        Assert.That(replica.Terrain.Sample(10f, -20f).Height, Is.EqualTo(plain.Terrain.Sample(10f, -20f).Height));
+        Assert.That(replica.Terrain.World.Lakes, Is.EqualTo(plain.Terrain.World.Lakes));
+        Assert.That(replica.Plants.Plants[0].Position, Is.Not.EqualTo(plain.Plants.Plants[0].Position));
+        Assert.That(replica.Creatures[0].Position, Is.Not.EqualTo(plain.Creatures[0].Position));
+    }
+
+    [Test]
+    public void Should_CountBuriedTicks_When_SolidBlockIsAboveHead()
+    {
+        var world = NewWorld(population: 0);
+        var spot = world.Terrain.RandomLandPoint(new SimRandom(5), 60f);
+        var creature = world.Spawn(1, spot + Vector3.UnitY * 0.05f)!;
+        var grid = world.Terrain.Grid;
+        var (bx, by, bz) = grid.WorldToBlock(creature.Position.X, creature.Position.Y + SimCreature.Shape.Height + 0.1f, creature.Position.Z);
+        grid.Set(bx, by, bz, CreatureIA.Core.Voxel.BlockType.Stone);
+
+        world.StepPhysics();
+
+        Assert.That(world.Exploits.CreatureTicks, Is.EqualTo(1));
+        Assert.That(world.Exploits.Buried, Is.EqualTo(1));
+        Assert.That(world.Exploits.AtBorder, Is.EqualTo(0));
+    }
+
+    [Test]
     public void Should_GiveSameSequence_When_SimRandomSeedsMatch()
     {
         var a = new SimRandom(42);

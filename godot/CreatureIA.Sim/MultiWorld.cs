@@ -19,7 +19,18 @@ public sealed class MultiWorld
     public IReadOnlyList<SimWorld> Worlds => _worlds;
     public int LiveCount => _worlds.Sum(w => w.Creatures.Count);
 
-    public MultiWorld(SimWorldSettings baseSettings, int worldCount)
+    public ExploitCounters Exploits()
+    {
+        var total = new ExploitCounters();
+        foreach (var world in _worlds) total.Add(world.Exploits);
+        return total;
+    }
+
+    /// <param name="replicas">
+    /// false: world w uses seed Seed + w (training). true: every world uses the terrain of Seed with
+    /// salt w (evaluation replicas on the reserved seed).
+    /// </param>
+    public MultiWorld(SimWorldSettings baseSettings, int worldCount, bool replicas = false)
     {
         _worlds = new SimWorld[worldCount];
         _eventsPerWorld = new SimEvent[worldCount][];
@@ -27,7 +38,8 @@ public sealed class MultiWorld
         Parallel.For(0, worldCount, w =>
         {
             var ids = Enumerable.Range(0, population).Select(i => (uint)(w * population + i + 1));
-            _worlds[w] = new SimWorld(baseSettings with { Seed = baseSettings.Seed + w }, ids);
+            var settings = replicas ? baseSettings with { Salt = w } : baseSettings with { Seed = baseSettings.Seed + w };
+            _worlds[w] = new SimWorld(settings, ids);
         });
         for (var w = 0; w < worldCount; w++)
             foreach (var creature in _worlds[w].Creatures) _worldOf[creature.Id] = w;

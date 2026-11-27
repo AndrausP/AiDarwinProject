@@ -18,7 +18,8 @@ param(
     [int]$Lakes = 6,
     [double]$Curiosity = 0.02,
     [double]$LearningRate = 3e-4,
-    [switch]$NoRespawn
+    [switch]$NoRespawn,
+    [switch]$NoBuild                # skip the Release build (parallel runs: build once beforehand)
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath "$PSScriptRoot\..").Path
@@ -31,10 +32,19 @@ $dotnet = Join-Path $env:DOTNET_ROOT "dotnet.exe"
 $python = Join-Path $root ".venv\Scripts\python.exe"
 
 $simProject = Join-Path $root "godot\CreatureIA.Sim\CreatureIA.Sim.csproj"
-& $dotnet build $simProject -c Release -v q -nologo | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "CreatureIA.Sim build failed." }
-$sim = Get-ChildItem -LiteralPath (Join-Path $root "godot\CreatureIA.Sim\bin\Release") -Recurse -Filter "CreatureIA.Sim.exe" |
-    Select-Object -First 1 -ExpandProperty FullName
+if (-not $NoBuild) {
+    & $dotnet build $simProject -c Release -v q -nologo | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "CreatureIA.Sim build failed." }
+}
+# Newest build of any configuration (a build made while another run locks bin\Release goes elsewhere).
+$built = Get-ChildItem -LiteralPath (Join-Path $root "godot\CreatureIA.Sim\bin") -Recurse -Filter "CreatureIA.Sim.exe" |
+    Where-Object { $_.FullName -notmatch '\\Debug\\' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+# Each run executes its own copy: rebuilding never collides with a running sim, and the run keeps
+# the exact simulator it was trained on.
+$simDir = Join-Path $runDir "sim"
+New-Item -ItemType Directory -Force $simDir | Out-Null
+Copy-Item -Path (Join-Path $built.DirectoryName "*") -Destination $simDir -Recurse -Force
+$sim = Join-Path $simDir "CreatureIA.Sim.exe"
 
 $inv = [Globalization.CultureInfo]::InvariantCulture
 $serverArgs = @("-m", "creature_brain.bridge.server", "--port", $Port, "--policy", $Policy, "--seed", $Seed,
@@ -56,7 +66,7 @@ while (-not (Select-String -Path (Join-Path $runDir "server.log") -Pattern "list
 }
 
 $simArgs = @("--port", $Port, "--worlds", $Worlds, "--seed", $Seed, "--population", $Population,
-    "--plants", $Plants, "--lakes", $Lakes, "--ticks", $Ticks)
+    "--plants", $Plants, "--lakes", $Lakes, "--ticks", $Ticks, "--report-file", (Join-Path $runDir "sim-report.json"))
 if ($NoRespawn) { $simArgs += "--quit-when-extinct" }
 Write-Host "training $Policy ($Brain) on CreatureIA.Sim: $Worlds world(s) x $Population for $Ticks ticks -> $runDir"
 $simProcess = Start-Process -FilePath $sim -ArgumentList $simArgs -NoNewWindow -PassThru `

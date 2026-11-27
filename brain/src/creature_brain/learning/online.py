@@ -58,6 +58,9 @@ class OnlinePPOConfig:
     # comparison and to resume runs started before v3 (e.g. v2-ppo-a).
     brain: str = "gru"
     curiosity: CuriosityConfig = CuriosityConfig()
+    # Frozen evaluation (T1.2): fixed weights and normalisers, no rollout, no update, no curiosity,
+    # no checkpoint writes. The brain still carries its memory through each life.
+    frozen: bool = False
 
 
 @dataclass(slots=True)
@@ -120,7 +123,10 @@ class OnlinePPOPolicy:
         self.last_update: UpdateMetrics | None = None
         self.last_mean_reward = 0.0
         self._step_rewards: list[float] = []
+        self._frozen_previous_slots: tuple[int | None, ...] = ()
         checkpoint = online_config.checkpoint_path
+        if online_config.frozen and (checkpoint is None or not checkpoint.exists()):
+            raise ValueError("frozen evaluation needs an existing checkpoint")
         if checkpoint is not None and checkpoint.exists():
             self.update_count, extra = self.trainer.load_checkpoint_with_extra(checkpoint)
             if "observation_rms" in extra:
@@ -130,7 +136,7 @@ class OnlinePPOPolicy:
             if "novelty_rms" in extra:
                 self.novelty_rms.load_state_dict(extra["novelty_rms"])
 
-    _SESSION_FIELDS = ("rollout", "pending", "slots", "_slot_returns", "_step_rewards", "hidden")
+    _SESSION_FIELDS = ("rollout", "pending", "slots", "_slot_returns", "_step_rewards", "hidden", "_frozen_previous_slots")
 
     def _new_rollout(self) -> RolloutBuffer | SequenceRolloutBuffer:
         return SequenceRolloutBuffer() if self.recurrent else RolloutBuffer()
@@ -154,7 +160,38 @@ class OnlinePPOPolicy:
             "slots": [],
             "_slot_returns": np.zeros(0, dtype=np.float64),
             "_step_rewards": [],
+            "_frozen_previous_slots": (),
         }
+
+    @torch.no_grad()
+    def _act_frozen(self, step: Step) -> tuple[tuple[float, ...], ...]:
+        """Evaluation tick: same slots and memory handling as training, nothing learned or saved."""
+        array = step.observation_array
+        if array is None:
+            array = np.asarray(step.observations, dtype=np.float32).reshape(-1, OBSERVATION_DIM)
+        observations = self._observation_tensor(array, update=False)
+        row_of = {creature_id: row for row, creature_id in enumerate(step.creature_ids)}
+        previous = self._frozen_previous_slots
+        if not previous or not self._assign_slots(step.creature_ids, self._death_ids(step)):
+            self.slots = list(sorted(step.creature_ids))
+            previous = ()
+        slot_observations = self._slot_observations(observations, row_of)
+        hidden_in = None
+        if self.recurrent:
+            count = len(self.slots)
+            starts = torch.tensor(
+                [cid is None or i >= len(previous) or previous[i] != cid for i, cid in enumerate(self.slots)],
+                dtype=torch.bool, device=self.device,
+            )
+            if self.hidden is None or self.hidden.shape[0] != count:
+                self.hidden = self.model.initial_state(count, self.device)
+            hidden_in = self.hidden * (~starts).unsqueeze(-1).to(self.hidden.dtype)
+        actions, _, _, _, hidden_out = self._decide(slot_observations, hidden_in)
+        self.hidden = hidden_out
+        self._frozen_previous_slots = tuple(self.slots)
+        slot_of = {creature_id: slot for slot, creature_id in enumerate(self.slots) if creature_id is not None}
+        rows = actions.detach().cpu().tolist()
+        return tuple(tuple(rows[slot_of[creature_id]]) for creature_id in step.creature_ids)
 
     def act(self, step: Step) -> tuple[tuple[float, ...], ...]:
         """Vectorised-env style: a fixed set of agent slots. A creature that dies ends its
@@ -163,6 +200,8 @@ class OnlinePPOPolicy:
 
         One forward pass per tick: a creature that survives keeps its slot, so the value
         computed for the next decision doubles as the GAE bootstrap of the last transition."""
+        if self.online_config.frozen:
+            return self._act_frozen(step)
         array = step.observation_array
         if array is None:
             array = np.asarray(step.observations, dtype=np.float32).reshape(-1, OBSERVATION_DIM)
@@ -415,7 +454,7 @@ class OnlinePPOPolicy:
                 result.add(creature_id)
         return result
 
-    def _observation_tensor(self, array: np.ndarray) -> Tensor:
+    def _observation_tensor(self, array: np.ndarray, *, update: bool = True) -> Tensor:
         if array.shape[0] == 0:
             return torch.empty((0, OBSERVATION_DIM), dtype=torch.float32, device=self.device)
         if array.ndim != 2 or array.shape[1] != OBSERVATION_DIM:
@@ -423,9 +462,10 @@ class OnlinePPOPolicy:
         # Same float64 statistics and normalisation as before, computed on the device (T2.0e):
         # the numpy version cost ~11 ms per tick at 288 creatures.
         raw = torch.from_numpy(np.require(array, dtype=np.float32, requirements=("C", "W"))).to(self.device, torch.float64)
-        self.observation_rms.update_from_moments(
-            raw.mean(dim=0).cpu().numpy(), raw.var(dim=0, unbiased=False).cpu().numpy(), raw.shape[0]
-        )
+        if update:
+            self.observation_rms.update_from_moments(
+                raw.mean(dim=0).cpu().numpy(), raw.var(dim=0, unbiased=False).cpu().numpy(), raw.shape[0]
+            )
         mean = torch.as_tensor(self.observation_rms.mean, device=self.device)
         std = torch.as_tensor(np.sqrt(self.observation_rms.var + 1e-8), device=self.device)
         return ((raw - mean) / std).clamp(-10.0, 10.0).to(torch.float32)

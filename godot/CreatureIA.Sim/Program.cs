@@ -21,9 +21,10 @@ var settings = new SimWorldSettings
     Lakes = options.Lakes,
 };
 var clock = Stopwatch.StartNew();
-var worlds = new MultiWorld(settings, options.Worlds);
+var worlds = new MultiWorld(settings, options.Worlds, options.Replicas);
+var seeds = options.Replicas ? $"terrain seed {options.Seed}, salts 0..{options.Worlds - 1}" : $"seeds {options.Seed}..{options.Seed + options.Worlds - 1}";
 Console.Error.WriteLine($"[sim] {options.Worlds} world(s) x {options.Population} creatures generated in {clock.ElapsedMilliseconds} ms " +
-                        $"(seeds {options.Seed}..{options.Seed + options.Worlds - 1}, plants={options.Plants}, lakes={options.Lakes})");
+                        $"({seeds}, plants={options.Plants}, lakes={options.Lakes})");
 
 if (options.Bench)
 {
@@ -96,7 +97,15 @@ for (; options.Ticks == 0 || brainTick < (ulong)options.Ticks; brainTick++)
         window.Restart();
     }
 }
-Console.Error.WriteLine($"[run] stopping at brain tick {brainTick}: {(options.Ticks > 0 && brainTick >= (ulong)options.Ticks ? "horizon" : "extinct")}");
+var reason = options.Ticks > 0 && brainTick >= (ulong)options.Ticks ? "horizon" : "extinct";
+Console.Error.WriteLine($"[run] stopping at brain tick {brainTick}: {reason}");
+var exploits = worlds.Exploits();
+var report = string.Create(CultureInfo.InvariantCulture,
+    $"{{\"brain_ticks\": {brainTick}, \"stop\": \"{reason}\", \"worlds\": {options.Worlds}, \"replicas\": {(options.Replicas ? "true" : "false")}, " +
+    $"\"seed\": {options.Seed}, \"creature_ticks\": {exploits.CreatureTicks}, \"on_leaves_share\": {exploits.Share(exploits.OnLeaves):F6}, " +
+    $"\"buried_share\": {exploits.Share(exploits.Buried):F6}, \"at_border_share\": {exploits.Share(exploits.AtBorder):F6}}}");
+Console.Error.WriteLine($"[exploits] {report}");
+if (options.ReportFile is not null) File.WriteAllText(options.ReportFile, report + Environment.NewLine);
 return 0;
 
 static void Write(NetworkStream stream, IProtocolMessage message)
@@ -129,7 +138,9 @@ internal sealed record Options
     public long Ticks { get; init; }
     public bool QuitWhenExtinct { get; init; }
     public bool Bench { get; init; }
+    public bool Replicas { get; init; }
     public int ReportEvery { get; init; } = 600;
+    public string? ReportFile { get; init; }
 
     public static Options Parse(string[] args)
     {
@@ -150,6 +161,8 @@ internal sealed record Options
                 "--ticks" => o with { Ticks = long.Parse(Next(), CultureInfo.InvariantCulture) },
                 "--quit-when-extinct" => o with { QuitWhenExtinct = true },
                 "--bench" => o with { Bench = true },
+                "--replicas" => o with { Replicas = true },
+                "--report-file" => o with { ReportFile = Next() },
                 "--report-every" => o with { ReportEvery = NextInt() },
                 _ => throw new ArgumentException($"unknown option {args[i]}")
             };

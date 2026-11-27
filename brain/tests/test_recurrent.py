@@ -170,3 +170,36 @@ def test_should_run_without_curiosity_when_weight_is_zero() -> None:
         policy.act(Step(tick, (1,), (obs,)))
     assert policy.curiosity is None
     assert policy.update_count >= 1
+
+
+@pytest.mark.parametrize("brain", ["gru", "mlp"])
+def test_should_keep_weights_and_checkpoint_when_evaluation_is_frozen(tmp_path, brain) -> None:
+    import numpy as np
+
+    checkpoint = tmp_path / "ppo.pt"
+    trainer = OnlinePPOPolicy(online_config=OnlinePPOConfig(
+        rollout_horizon=4, checkpoint_every_updates=1, checkpoint_path=checkpoint, brain=brain))
+    observations = tuple(map(tuple, torch.rand(2, OBSERVATION_DIM).tolist()))
+    for tick in range(6):
+        trainer.act(Step(tick, (1, 2), observations))
+    assert checkpoint.exists()
+    saved_bytes = checkpoint.read_bytes()
+
+    frozen = OnlinePPOPolicy(online_config=OnlinePPOConfig(
+        rollout_horizon=4, checkpoint_every_updates=1, checkpoint_path=checkpoint, brain=brain, frozen=True))
+    weights = {name: value.clone() for name, value in frozen.model.state_dict().items()}
+    mean = frozen.observation_rms.mean.copy()
+    for tick in range(40):
+        ids = (1, 2) if tick < 20 else (2, 3)  # a death and a newborn mid-run
+        actions = frozen.act(Step(tick, ids, tuple(map(tuple, torch.rand(2, OBSERVATION_DIM).tolist()))))
+        assert len(actions) == 2 and all(len(a) == ACTION_DIM for a in actions)
+
+    assert all(torch.equal(weights[name], value) for name, value in frozen.model.state_dict().items())
+    assert np.array_equal(frozen.observation_rms.mean, mean)
+    assert frozen.update_count == trainer.update_count
+    assert checkpoint.read_bytes() == saved_bytes
+
+
+def test_should_refuse_frozen_evaluation_when_checkpoint_is_missing(tmp_path) -> None:
+    with pytest.raises(ValueError):
+        OnlinePPOPolicy(online_config=OnlinePPOConfig(checkpoint_path=tmp_path / "none.pt", frozen=True))
